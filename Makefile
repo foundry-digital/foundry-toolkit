@@ -1,5 +1,5 @@
 # Foundry Toolkit. `make check` is the only judge of done.
-.PHONY: check lint analyse test zip
+.PHONY: check lint analyse test zip release
 
 VENDOR := vendor/bin
 
@@ -34,3 +34,7 @@ zip:
 	fi
 	cd build && zip -qr foundry-toolkit.zip foundry-toolkit
 	@echo "built build/foundry-toolkit.zip"
+
+## release: publish a signed release to GitHub (scripts/release.sh); make release VERSION=1.2.0
+release:
+	scripts/release.sh "$(VERSION)"

@@ -1,0 +1,8 @@
+{
+  "description": "A release signature made with the fixture key (S13). Checked by TestSignReleaseMatchesFixture and the toolkit's UpdaterTest.",
+  "message": "foundry-toolkit\n1.2.0\nb9af27ed99e44b926527ae44143615301f6c5a9a2482b2c67eb783df081b4c41",
+  "sha256": "b9af27ed99e44b926527ae44143615301f6c5a9a2482b2c67eb783df081b4c41",
+  "signature": "L4KweDwM10MBLsrpsVU8FBFK9iohTeB8WyRSh9LOsb9c0OkrRuVByV++kUS029Txu/KVNl+aXF5lQodFM8wzBA==",
+  "version": "1.2.0",
+  "zip_base64": "UEsDBCBGb3VuZHJ5IFRvb2xraXQgcmVsZWFzZSBmaXh0dXJlLCBub3QgYSByZWFsIHppcAo="
+}

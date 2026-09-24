@@ -78,6 +78,8 @@ final class Foundry_Toolkit {
 			self::$hardening = true;
 		}
 
+		Foundry_Toolkit_Updater::boot();
+
 		register_activation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Loader', 'activate' ) );
 		register_deactivation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Loader', 'remove' ) );
 		add_action( 'admin_init', array( 'Foundry_Toolkit_Loader', 'repair' ) );

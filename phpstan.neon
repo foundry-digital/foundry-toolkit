@@ -22,3 +22,4 @@ parameters:
         - FDHARDEN_LOCK_REGISTRATION
         # Defined by whichever copy loads first: ours or an old must-use agent.
         - SITEMANAGER_AGENT_VERSION
+        - FOUNDRY_TOOLKIT_PRERELEASES

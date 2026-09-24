@@ -40,6 +40,7 @@ if ( ! defined( 'SITEMANAGER_PUBLIC_KEY' ) ) {
 
 require_once __DIR__ . '/includes/class-foundry-toolkit.php';
 require_once __DIR__ . '/includes/class-foundry-toolkit-loader.php';
+require_once __DIR__ . '/includes/class-foundry-toolkit-updater.php';
 
 if ( ! defined( 'SM_AGENT_TESTING' ) ) {
 	Foundry_Toolkit::boot();

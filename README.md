@@ -37,6 +37,20 @@ Filters: `fdharden_security_headers`, `fdharden_blocked_anon_rest_routes`, `fdha
 
 Nothing here may break a WooCommerce or Gravity Forms payment. `tests/HardeningTest.php` guards the parts that could: the Permissions-Policy never restricts `payment` (Apple Pay and Google Pay), the anonymous REST block only touches core `/wp/v2` and `/oembed` routes, and product reviews survive comments being off.
 
+## Updates
+
+The plugin checks this repository's latest GitHub release whenever WordPress runs its own update check, at most every six hours. A newer release shows as an update in WordPress and in Site Manager, like any other plugin. It installs only if the zip's signature verifies against the Site Manager key built into the plugin (S13). A zip from anywhere else, or one changed after it was signed, is refused with a message on the update screen. Automatic updates stay off: it updates when you click.
+
+Define `FOUNDRY_TOOLKIT_PRERELEASES` as `true` in `wp-config.php` on a test site to be offered pre-releases such as `1.3.0-rc1`.
+
+## Releasing
+
+```bash
+make release VERSION=1.2.1
+```
+
+`scripts/release.sh` sets the version, runs `make check`, commits, builds the zip with Site Manager's public key baked in, signs it with Site Manager's private key (`sitemanager sign-release`, which never leaves the Mac), tags, pushes and creates the GitHub release with `foundry-toolkit.zip` and `foundry-toolkit.zip.sig`. It needs the Site Manager app installed (`make app` in site-manager) and `gh` signed in.
+
 ## Development
 
 ```bash
