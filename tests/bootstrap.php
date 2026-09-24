@@ -300,6 +300,8 @@ class SM_Test_Upgrader {
 	public $methods = array();
 	/** @var callable|null */
 	public $on_upgrade = null;
+	/** @var array<string, mixed> Results for single items of a bulk upgrade, by key. */
+	public $per_item = array();
 
 	public function __construct( Automatic_Upgrader_Skin $skin ) {
 		$this->skin = $skin;
@@ -331,7 +333,13 @@ class SM_Test_Upgrader {
 		// Plugin_Upgrader::bulk_upgrade answers per plugin file; language
 		// packs, passed as objects, get the plain result.
 		if ( array() !== $what && count( array_filter( $what, 'is_string' ) ) === count( $what ) ) {
-			return array_fill_keys( $what, $this->result );
+			$out = array_fill_keys( $what, $this->result );
+			foreach ( $this->per_item as $k => $r ) {
+				if ( array_key_exists( $k, $out ) ) {
+					$out[ $k ] = $r;
+				}
+			}
+			return $out;
 		}
 		return $this->result;
 	}

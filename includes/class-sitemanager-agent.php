@@ -33,6 +33,8 @@ final class SiteManager_Agent {
 	public const LOCK_TRANSIENT   = 'sm_update_lock';
 	public const LOCK_TTL         = 600;
 	public const MAX_MESSAGES     = 50;
+	public const MAX_BATCH        = 50;
+	public const MAX_BATCH_MSGS   = 200;
 
 	/**
 	 * Clock used by the permission callback; tests replace it.
@@ -65,6 +67,14 @@ final class SiteManager_Agent {
 	 * @var array<string, callable|null>|null
 	 */
 	public static $cache_tools = null;
+
+	/**
+	 * Test seam: builds the report returned with a batch update. Null builds
+	 * the real one.
+	 *
+	 * @var callable(): array<string, mixed>|null
+	 */
+	public static $report_factory = null;
 
 	/**
 	 * Overrides for the plugins directory, the old snapshot stores and the
@@ -918,11 +928,12 @@ final class SiteManager_Agent {
 	 * updaters put licence keys in them (P39), and cap the list.
 	 *
 	 * @param string[] $messages Raw messages.
+	 * @param int      $cap      Most messages kept.
 	 * @return string[]
 	 */
-	private static function clean_messages( $messages ) {
+	private static function clean_messages( $messages, $cap = self::MAX_MESSAGES ) {
 		$out = array();
-		foreach ( array_slice( $messages, 0, self::MAX_MESSAGES ) as $m ) {
+		foreach ( array_slice( $messages, 0, $cap ) as $m ) {
 			$cleaned = preg_replace( '/\?[^\s"\'<>]*/', '', (string) $m );
 			$out[]   = null === $cleaned ? '' : $cleaned;
 		}
@@ -1031,6 +1042,9 @@ final class SiteManager_Agent {
 		if ( null === $body ) {
 			return self::fail( 'sm_bad_request', 'The body must be a JSON object.', 400 );
 		}
+		if ( array_key_exists( 'items', $body ) ) {
+			return self::update_batch( $request, $body['items'] );
+		}
 		$type = isset( $body['type'] ) && is_string( $body['type'] ) ? $body['type'] : '';
 		if ( ! in_array( $type, array( 'plugin', 'theme', 'core', 'translation' ), true ) ) {
 			return self::fail( 'sm_bad_request', 'type must be plugin, theme, core or translation.', 400 );
@@ -1107,7 +1121,7 @@ final class SiteManager_Agent {
 					)
 				);
 			}
-			$caches   = 'plugin' === $type ? self::clear_caches( $item ) : array();
+			$caches   = 'plugin' === $type ? self::clear_caches( array( $item ) ) : array();
 			$duration = (int) round( ( microtime( true ) - $started ) * 1000 );
 			$response = new WP_REST_Response(
 				array(
@@ -1130,19 +1144,317 @@ final class SiteManager_Agent {
 	}
 
 	/**
+	 * Check one item of a batch (P33b): its shape, and nothing but type,
+	 * item and expected_version (S1: no URL, package or version to install).
+	 *
+	 * @param mixed $raw The item as sent.
+	 * @return array{type: string, item: string, expected: string}|string The item, or why it is refused.
+	 */
+	private static function batch_item( $raw ) {
+		if ( ! is_array( $raw ) || array() !== array_diff( array_keys( $raw ), array( 'type', 'item', 'expected_version' ) ) ) {
+			return 'each item is an object with only type, item and expected_version';
+		}
+		$type = isset( $raw['type'] ) && is_string( $raw['type'] ) ? $raw['type'] : '';
+		if ( ! in_array( $type, array( 'plugin', 'theme', 'core', 'translation' ), true ) ) {
+			return 'type must be plugin, theme, core or translation';
+		}
+		$item = isset( $raw['item'] ) && is_string( $raw['item'] ) ? $raw['item'] : '';
+		if ( '' === $item || ! self::item_ok( $type, $item ) ) {
+			return 'item is missing or not the right shape for its type';
+		}
+		$expected = isset( $raw['expected_version'] ) && is_string( $raw['expected_version'] ) ? $raw['expected_version'] : '';
+		if ( 'translation' === $type ? array_key_exists( 'expected_version', $raw ) : '' === $expected ) {
+			return 'expected_version is required for plugin, theme and core, and not allowed for translation';
+		}
+		return array(
+			'type'     => $type,
+			'item'     => $item,
+			'expected' => $expected,
+		);
+	}
+
+	/**
+	 * Ask WordPress for a fresh list of updates of one type, once, when an
+	 * item the app asked for is not on the list it has.
+	 *
+	 * @param string $type Type.
+	 * @return void
+	 */
+	private static function refresh_offers( $type ) {
+		if ( 'plugin' === $type ) {
+			delete_site_transient( 'update_plugins' );
+			wp_update_plugins();
+		} elseif ( 'theme' === $type ) {
+			delete_site_transient( 'update_themes' );
+			wp_update_themes();
+		} elseif ( 'core' === $type ) {
+			wp_version_check( array(), true );
+		}
+	}
+
+	/**
+	 * One result of a batch.
+	 *
+	 * @param array{type: string, item: string, expected: string} $w      The item.
+	 * @param array<string, mixed>                                $fields Fields to set.
+	 * @return array<string, mixed>
+	 */
+	private static function batch_result( $w, $fields ) {
+		return array_merge(
+			array(
+				'type'                   => $w['type'],
+				'item'                   => $w['item'],
+				'ok'                     => false,
+				'from_version'           => '',
+				'to_version'             => '',
+				'reactivated'            => false,
+				'code'                   => '',
+				'message'                => '',
+				'likely_licence_problem' => false,
+			),
+			$fields
+		);
+	}
+
+	/**
+	 * POST /update with a list of items (P33b, ADR 0026): every update for a
+	 * site in one request, as ManageWP does. Each item is checked against
+	 * what WordPress offers, refreshing WordPress's list once per type only
+	 * when an item is missing from it. Plugins then go through one bulk
+	 * upgrade (one maintenance window), themes through another, then core,
+	 * then translations. One item failing never stops the others. Caches are
+	 * cleared once, and the answer carries a fresh report.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @param mixed           $items   The items as sent.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private static function update_batch( $request, $items ) {
+		$started = microtime( true );
+		if ( ! is_array( $items ) || array() === $items || count( $items ) > self::MAX_BATCH || array_keys( $items ) !== range( 0, count( $items ) - 1 ) ) {
+			return self::fail( 'sm_bad_request', 'items must be a list of 1 to ' . self::MAX_BATCH . ' updates.', 400 );
+		}
+		$want = array();
+		$seen = array();
+		foreach ( $items as $i => $raw ) {
+			$w = self::batch_item( $raw );
+			if ( is_string( $w ) ) {
+				return self::fail( 'sm_bad_request', 'items[' . $i . ']: ' . $w . '.', 400 );
+			}
+			$key = $w['type'] . ':' . $w['item'];
+			if ( isset( $seen[ $key ] ) ) {
+				return self::fail( 'sm_bad_request', 'items[' . $i . ']: ' . $w['item'] . ' is listed twice.', 400 );
+			}
+			$seen[ $key ] = true;
+			$want[]       = $w;
+		}
+		if ( ! self::take_lock( (string) $request->get_header( 'x_sm_nonce' ) ) ) {
+			return self::fail( 'sm_busy', 'Another update is running.', 409 );
+		}
+		try {
+			self::remove_old_stores();
+			self::load_updater_code();
+			set_time_limit( 600 ); // phpcs:ignore -- ignore failure of this call.
+			ignore_user_abort( true );
+
+			// 1. Check every item before anything changes.
+			$results   = array();
+			$run       = array(
+				'plugin'      => array(),
+				'theme'       => array(),
+				'core'        => array(),
+				'translation' => array(),
+			);
+			$offers    = array();
+			$refreshed = array();
+			foreach ( $want as $i => $w ) {
+				if ( ! self::installed( $w['type'], $w['item'] ) ) {
+					$results[ $i ] = self::batch_result(
+						$w,
+						array(
+							'code'    => 'sm_not_installed',
+							'message' => 'That item is not installed.',
+						)
+					);
+					continue;
+				}
+				list( $version, $offer ) = self::offered( $w['type'], $w['item'] );
+				if ( ( null === $version || ( 'translation' !== $w['type'] && $version !== $w['expected'] ) ) && ! isset( $refreshed[ $w['type'] ] ) ) {
+					self::refresh_offers( $w['type'] );
+					$refreshed[ $w['type'] ] = true;
+					list( $version, $offer ) = self::offered( $w['type'], $w['item'] );
+				}
+				$from = self::installed_version( $w['type'], $w['item'] );
+				if ( null === $version ) {
+					$results[ $i ] = self::batch_result(
+						$w,
+						array(
+							'from_version' => $from,
+							'to_version'   => $from,
+							'code'         => 'sm_no_update_available',
+							'message'      => 'WordPress offers no update for that item.',
+						)
+					);
+					continue;
+				}
+				if ( 'translation' !== $w['type'] && $version !== $w['expected'] ) {
+					$results[ $i ] = self::batch_result(
+						$w,
+						array(
+							'from_version'    => $from,
+							'to_version'      => $from,
+							'code'            => 'sm_version_mismatch',
+							'message'         => 'WordPress now offers ' . $version . ', not ' . $w['expected'] . '.',
+							'offered_version' => $version,
+						)
+					);
+					continue;
+				}
+				$run[ $w['type'] ][ $i ] = $from;
+				$offers[ $i ]            = $offer;
+			}
+
+			// 2. Upgrade, one bulk upgrade per type.
+			$messages = array();
+			$updated  = array();
+			if ( array() !== $run['plugin'] ) {
+				$files  = array();
+				$states = array();
+				foreach ( array_keys( $run['plugin'] ) as $i ) {
+					$files[ $i ]  = $want[ $i ]['item'];
+					$states[ $i ] = self::activation_state( $want[ $i ]['item'] );
+				}
+				$skin     = new Automatic_Upgrader_Skin();
+				$upgrader = self::upgrader( 'plugin', $skin );
+				// The "update now" path: an active plugin stays on (P39a).
+				$out      = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( array_values( $files ) ) : false;
+				$raw      = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
+				$group    = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+				$messages = array_merge( $messages, $group );
+				foreach ( $files as $i => $file ) {
+					$r           = is_array( $out ) ? ( $out[ $file ] ?? false ) : $out;
+					$reactivated = self::restore_activation( $file, $states[ $i ] );
+					if ( $reactivated instanceof WP_Error ) {
+						$messages[]  = $file . ': could not switch the plugin back on: ' . $reactivated->get_error_message();
+						$reactivated = false;
+					}
+					$results[ $i ] = self::group_result( $want[ $i ], $run['plugin'][ $i ], $r, $group, (bool) $reactivated );
+					if ( $results[ $i ]['ok'] ) {
+						$updated[] = $file;
+					}
+				}
+			}
+			if ( array() !== $run['theme'] ) {
+				$slugs = array();
+				foreach ( array_keys( $run['theme'] ) as $i ) {
+					$slugs[ $i ] = $want[ $i ]['item'];
+				}
+				$skin     = new Automatic_Upgrader_Skin();
+				$upgrader = self::upgrader( 'theme', $skin );
+				$out      = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( array_values( $slugs ) ) : false;
+				$raw      = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
+				$group    = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+				$messages = array_merge( $messages, $group );
+				foreach ( $slugs as $i => $slug ) {
+					$r             = is_array( $out ) ? ( $out[ $slug ] ?? false ) : $out;
+					$results[ $i ] = self::group_result( $want[ $i ], $run['theme'][ $i ], $r, $group, false );
+				}
+			}
+			foreach ( array( 'core', 'translation' ) as $type ) {
+				foreach ( $run[ $type ] as $i => $from ) {
+					$skin     = new Automatic_Upgrader_Skin();
+					$upgrader = self::upgrader( $type, $skin );
+					if ( 'core' === $type ) {
+						$r = method_exists( $upgrader, 'upgrade' ) ? $upgrader->upgrade( $offers[ $i ] ) : false;
+					} else {
+						$r = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( $offers[ $i ] ) : false;
+					}
+					$raw           = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
+					$group         = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+					$messages      = array_merge( $messages, $group );
+					$results[ $i ] = self::group_result( $want[ $i ], $from, $r, $group, false );
+				}
+			}
+
+			// 3. Caches once, then a fresh report.
+			$caches = array() !== $updated ? self::clear_caches( $updated ) : array();
+			ksort( $results );
+			$results  = array_values( $results );
+			$report   = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
+			$all_ok   = array() === array_filter(
+				$results,
+				static function ( $r ) {
+					return ! $r['ok'];
+				}
+			);
+			$response = new WP_REST_Response(
+				array(
+					'ok'          => $all_ok,
+					'items'       => $results,
+					'messages'    => array_slice( $messages, 0, self::MAX_BATCH_MSGS ),
+					'caches'      => $caches,
+					'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ),
+					'report'      => $report,
+				)
+			);
+			$response->header( 'Cache-Control', 'no-store' );
+			return $response;
+		} finally {
+			self::release_lock();
+		}
+	}
+
+	/**
+	 * The result of one item after its group's upgrade ran.
+	 *
+	 * @param array{type: string, item: string, expected: string} $w           The item.
+	 * @param string                                              $from        Version before.
+	 * @param mixed                                               $r           The upgrader's answer for it.
+	 * @param string[]                                            $messages    The group's messages.
+	 * @param bool                                                $reactivated Whether it was switched back on.
+	 * @return array<string, mixed>
+	 */
+	private static function group_result( $w, $from, $r, $messages, $reactivated ) {
+		$now = self::installed_version( $w['type'], $w['item'] );
+		if ( $r instanceof WP_Error || false === $r || null === $r ) {
+			$error = $r instanceof WP_Error ? $r->get_error_message() : 'The upgrader reported failure.';
+			return self::batch_result(
+				$w,
+				array(
+					'from_version'           => $from,
+					'to_version'             => $now,
+					'reactivated'            => $reactivated,
+					'code'                   => 'sm_upgrade_failed',
+					'message'                => $error,
+					'likely_licence_problem' => self::licence_problem( $messages, $error ),
+				)
+			);
+		}
+		return self::batch_result(
+			$w,
+			array(
+				'ok'           => true,
+				'from_version' => $from,
+				'to_version'   => $now,
+				'reactivated'  => $reactivated,
+			)
+		);
+	}
+
+	/**
 	 * Clear the caches a plugin update leaves stale (P39b): Elementor's files
 	 * and library when Elementor or Elementor Pro was updated, then WP Rocket, then
 	 * the Rocket.net CDN last so it refills from fresh pages. Only tools
 	 * that are installed are listed. A failed clear is reported, never
 	 * fatal: the update itself worked.
 	 *
-	 * @param string $item The plugin file just updated.
+	 * @param string[] $items The plugin files just updated.
 	 * @return array<int, array{name: string, status: string, detail: string}>
 	 */
-	private static function clear_caches( $item ) {
+	private static function clear_caches( $items ) {
 		$tools = is_array( self::$cache_tools ) ? self::$cache_tools : self::cache_tools();
 		$steps = array();
-		if ( in_array( $item, array( 'elementor/elementor.php', 'elementor-pro/elementor-pro.php' ), true ) ) {
+		if ( array() !== array_intersect( $items, array( 'elementor/elementor.php', 'elementor-pro/elementor-pro.php' ) ) ) {
 			$steps[] = 'elementor_files';
 			$steps[] = 'elementor_library';
 		}
