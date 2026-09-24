@@ -146,7 +146,7 @@ final class BatchUpdateTest extends UpdateSupport {
 				self::item( 'plugin', 'wp-rocket/wp-rocket.php', '3.19' ),
 			)
 		);
-		$this->assertSame( array( 'delete update_plugins', 'wp_update_plugins' ), $this->checks, 'one refresh for the type' );
+		$this->assertSame( array( 'delete foundry_toolkit_release', 'delete update_plugins', 'wp_update_plugins' ), $this->checks, 'one refresh for the type, asking GitHub again too' );
 		$this->assertSame( array( true, true ), array_column( $data['items'], 'ok' ) );
 	}
 

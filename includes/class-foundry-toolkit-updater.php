@@ -52,7 +52,7 @@ final class Foundry_Toolkit_Updater {
 	 * @return array{version: string, package: string, url: string, notes: string}|null
 	 */
 	public static function latest() {
-		$cached = get_site_transient( self::CACHE );
+		$cached = self::forced() ? false : get_site_transient( self::CACHE );
 		if ( is_array( $cached ) && array_key_exists( 'release', $cached ) ) {
 			return $cached['release'];
 		}
@@ -80,6 +80,26 @@ final class Foundry_Toolkit_Updater {
 		}
 		set_site_transient( self::CACHE, array( 'release' => $release ), null === $release ? HOUR_IN_SECONDS : 6 * HOUR_IN_SECONDS );
 		return $release;
+	}
+
+	/**
+	 * Whether someone asked WordPress to check for updates now: Dashboard,
+	 * Updates, Check again. Then the cached answer is not good enough.
+	 *
+	 * @return bool
+	 */
+	public static function forced() {
+		return is_admin() && isset( $_GET['force-check'] ); // phpcs:ignore WordPress.Security.NonceVerification -- read only: it only skips a cache.
+	}
+
+	/**
+	 * Forget the cached release, so the next update check asks GitHub. The
+	 * agent calls this when it refreshes WordPress's list of plugin updates.
+	 *
+	 * @return void
+	 */
+	public static function forget() {
+		delete_site_transient( self::CACHE );
 	}
 
 	/**

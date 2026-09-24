@@ -1182,6 +1182,9 @@ final class SiteManager_Agent {
 	 */
 	private static function refresh_offers( $type ) {
 		if ( 'plugin' === $type ) {
+			if ( class_exists( 'Foundry_Toolkit_Updater' ) ) {
+				Foundry_Toolkit_Updater::forget();
+			}
 			delete_site_transient( 'update_plugins' );
 			wp_update_plugins();
 		} elseif ( 'theme' === $type ) {

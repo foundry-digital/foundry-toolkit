@@ -93,6 +93,13 @@ final class UpdaterTest extends TestCase {
 		);
 		Functions\when( '__' )->returnArg( 1 );
 		Functions\when( 'wp_delete_file' )->alias( 'unlink' );
+		Functions\when( 'is_admin' )->justReturn( false );
+		Functions\when( 'delete_site_transient' )->alias(
+			function ( string $k ): bool {
+				unset( $this->transients[ $k ] );
+				return true;
+			}
+		);
 	}
 
 	protected function tearDown(): void {
@@ -216,5 +223,27 @@ final class UpdaterTest extends TestCase {
 		$this->assertFalse( Foundry_Toolkit_Updater::no_auto_update( true, (object) array( 'plugin' => self::BASENAME ) ) );
 		$this->assertTrue( Foundry_Toolkit_Updater::no_auto_update( true, (object) array( 'plugin' => 'akismet/akismet.php' ) ) );
 		$this->assertNull( Foundry_Toolkit_Updater::no_auto_update( null, (object) array( 'plugin' => 'akismet/akismet.php' ) ) );
+	}
+
+	public function test_check_again_skips_the_cache(): void {
+		Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		$this->latest_is( self::release( 'v1.3.1' ) );
+		$this->http[ self::zip_url( '1.3.1' ) . '.sig' ] = $this->http[ self::zip_url( '1.2.0' ) . '.sig' ];
+		$u = Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		$this->assertSame( '1.2.0', $u['version'], 'cached for six hours' );
+
+		Functions\when( 'is_admin' )->justReturn( true );
+		$_GET['force-check'] = '1';
+		$u = Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		unset( $_GET['force-check'] );
+		$this->assertSame( '1.3.1', $u['version'], 'Check again asks GitHub' );
+	}
+
+	public function test_forget_clears_the_cache(): void {
+		Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		$this->latest_is( self::release( 'v1.3.1' ) );
+		Foundry_Toolkit_Updater::forget();
+		$u = Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		$this->assertSame( '1.3.1', $u['version'] );
 	}
 }
