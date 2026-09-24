@@ -3,7 +3,7 @@
  * Plugin Name: Foundry Toolkit
  * Plugin URI: https://github.com/foundry-digital/foundry-toolkit
  * Description: Foundry Digital's toolkit for client sites: the Site Manager agent (signed inventory reports and WordPress's own updates on request) and opinionated security hardening.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Foundry Digital
@@ -29,7 +29,7 @@ if ( defined( 'FOUNDRY_TOOLKIT_VERSION' ) ) {
 	return;
 }
 
-define( 'FOUNDRY_TOOLKIT_VERSION', '1.3.1' );
+define( 'FOUNDRY_TOOLKIT_VERSION', '1.3.2' );
 define( 'FOUNDRY_TOOLKIT_FILE', __FILE__ );
 
 if ( ! defined( 'SITEMANAGER_PUBLIC_KEY' ) ) {
