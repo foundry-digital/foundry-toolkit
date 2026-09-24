@@ -515,6 +515,6 @@ final class UpdateTest extends UpdateSupport {
 		$routes                              = array();
 		SiteManager_Agent::$updates_override = true;
 		SiteManager_Agent::register_routes();
-		$this->assertSame( array( '/report', '/update' ), $routes, 'no cache route since 1.0.4, no rollback route since 1.0.7' );
+		$this->assertSame( array( '/report', '/update', '/check' ), $routes, 'no cache route since 1.0.4, no rollback route since 1.0.7; check since 1.3.2' );
 	}
 }

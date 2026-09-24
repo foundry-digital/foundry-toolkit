@@ -195,6 +195,15 @@ final class SiteManager_Agent {
 				'permission_callback' => array( __CLASS__, 'permission' ),
 			)
 		);
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/check',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'check' ),
+				'permission_callback' => array( __CLASS__, 'permission' ),
+			)
+		);
 	}
 
 	/**
@@ -1141,6 +1150,42 @@ final class SiteManager_Agent {
 		} finally {
 			self::release_lock();
 		}
+	}
+
+	/**
+	 * POST /check (P33c): ask WordPress to check for updates now, and answer
+	 * with a fresh report, as ManageWP's sync does. It changes no plugin,
+	 * theme or content, only WordPress's own lists of available updates, and
+	 * waits while an update runs. The GET report never does this (P30).
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function check( $request ) {
+		unset( $request );
+		$started = microtime( true );
+		if ( false !== get_transient( self::LOCK_TRANSIENT ) ) {
+			return self::fail( 'sm_busy', 'An update is running; check again when it has finished.', 409 );
+		}
+		set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
+		if ( class_exists( 'Foundry_Toolkit_Updater' ) ) {
+			Foundry_Toolkit_Updater::forget();
+		}
+		delete_site_transient( 'update_plugins' );
+		delete_site_transient( 'update_themes' );
+		wp_update_plugins();
+		wp_update_themes();
+		wp_version_check( array(), true );
+		$report   = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
+		$response = new WP_REST_Response(
+			array(
+				'ok'          => true,
+				'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ),
+				'report'      => $report,
+			)
+		);
+		$response->header( 'Cache-Control', 'no-store' );
+		return $response;
 	}
 
 	/**
