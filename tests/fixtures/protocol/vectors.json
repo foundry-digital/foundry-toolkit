@@ -1,0 +1,908 @@
+{
+    "protocol": 1,
+    "description": "Signing test vectors for the Site Manager agent protocol. See docs/protocol.md section 11 for how to use them. Regenerate with testdata/protocol/generate-vectors.php.",
+    "keys": {
+        "seed_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+        "public_key_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+        "public_key_base64": "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=",
+        "other_seed_hex": "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
+        "other_public_hex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    },
+    "constants": {
+        "timestamp_window_seconds": 60,
+        "nonce_pattern": "^[0-9a-f]{32}$",
+        "timestamp_pattern": "^[1-9][0-9]{0,19}$",
+        "empty_body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cases": [
+        {
+            "name": "get_report_valid",
+            "expect": "accept",
+            "reason": "Well formed GET within the window.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_59s_old",
+            "expect": "accept",
+            "reason": "Timestamp 59 seconds behind server time is inside the window.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1789999941",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1789999941\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "b01LEj9PPYh73iRlY07SM15Dak91cNr0jlurM0XtYs1ySZKLvt1pFrMO5euKSCebKt3c+blrDCbgqQ66znLbCA=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1789999941",
+                    "X-SM-Signature": "b01LEj9PPYh73iRlY07SM15Dak91cNr0jlurM0XtYs1ySZKLvt1pFrMO5euKSCebKt3c+blrDCbgqQ66znLbCA=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_60s_old",
+            "expect": "accept",
+            "reason": "Exactly 60 seconds behind is the inclusive boundary.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1789999940",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1789999940\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "xJu87vdz2MsHRfOAP+zfyslLVmEGml7odpg0Nr45BDvrWHxHJwrMYNha2nbabUKa6+G3BD5jLcHgbpOAm3FqDA=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1789999940",
+                    "X-SM-Signature": "xJu87vdz2MsHRfOAP+zfyslLVmEGml7odpg0Nr45BDvrWHxHJwrMYNha2nbabUKa6+G3BD5jLcHgbpOAm3FqDA=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_60s_ahead",
+            "expect": "accept",
+            "reason": "Exactly 60 seconds ahead of server time is the inclusive boundary.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000060",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000060\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "nGD2Xamo6gIrN/DInL6WPSaHLxGA2uD6LseFJLQd/fltQm0x2h9PPVJ3QWuIN39LG0j8qtfN1Meg4ThuMLF1Cg=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000060",
+                    "X-SM-Signature": "nGD2Xamo6gIrN/DInL6WPSaHLxGA2uD6LseFJLQd/fltQm0x2h9PPVJ3QWuIN39LG0j8qtfN1Meg4ThuMLF1Cg=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "post_update_valid",
+            "expect": "accept",
+            "reason": "Well formed POST with nonce and body hash.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "get_report_timestamp_61s_old",
+            "expect": "reject",
+            "reason": "timestamp_out_of_window: 61 seconds behind server time.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1789999939",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1789999939\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "w5+g3ys9zDAH7KQJkYGjqOcTa1d5CAYez7tacZoGAez8vV0lY7E+/XSMaGE3xkLH9Ogor47jQD3Jd85hOZBGDg=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1789999939",
+                    "X-SM-Signature": "w5+g3ys9zDAH7KQJkYGjqOcTa1d5CAYez7tacZoGAez8vV0lY7E+/XSMaGE3xkLH9Ogor47jQD3Jd85hOZBGDg=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_61s_ahead",
+            "expect": "reject",
+            "reason": "timestamp_out_of_window: 61 seconds ahead of server time.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000061",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000061\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "TuYDzf6lKZyAnn4dL3BJTVgFz+wFdFB7m/YF2E8jyJf2SQhUpmCEokE8EpGRRthnLiKs/aL61QedRoj1lvrnAQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000061",
+                    "X-SM-Signature": "TuYDzf6lKZyAnn4dL3BJTVgFz+wFdFB7m/YF2E8jyJf2SQhUpmCEokE8EpGRRthnLiKs/aL61QedRoj1lvrnAQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_missing",
+            "expect": "reject",
+            "reason": "missing_header: X-SM-Timestamp absent.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_not_integer",
+            "expect": "reject",
+            "reason": "bad_timestamp: not a decimal integer.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000.5",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000.5\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "S8DvAZzEdQNSgiI5Hc049TmugKnio8U5tvFoVygSrtjzuF0MyUWfbPsc9ce7s67GYTaHgVuPsj0+8j9+GTuJBQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000.5",
+                    "X-SM-Signature": "S8DvAZzEdQNSgiI5Hc049TmugKnio8U5tvFoVygSrtjzuF0MyUWfbPsc9ce7s67GYTaHgVuPsj0+8j9+GTuJBQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_leading_zero",
+            "expect": "reject",
+            "reason": "bad_timestamp: leading zero is not canonical.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "01790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n01790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "c8f/7pSrmF6SOJ+cNKSCHl+FYo8g4W8mq7LNK6HzP88AE2J7ORoxEUzi1vHmq7UcAJvC6DpHf8kBVFwo7Uw0Bg=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "01790000000",
+                    "X-SM-Signature": "c8f/7pSrmF6SOJ+cNKSCHl+FYo8g4W8mq7LNK6HzP88AE2J7ORoxEUzi1vHmq7UcAJvC6DpHf8kBVFwo7Uw0Bg=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_timestamp_tampered",
+            "expect": "reject",
+            "reason": "bad_signature: signed for one timestamp, sent with another inside the window.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000005",
+                    "X-SM-Signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signature_missing",
+            "expect": "reject",
+            "reason": "missing_header: X-SM-Signature absent.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000"
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signature_not_base64",
+            "expect": "reject",
+            "reason": "bad_signature: header is not valid base64.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "not*base64!"
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signature_wrong_length",
+            "expect": "reject",
+            "reason": "bad_signature: decodes to 32 bytes, not 64.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_wrong_key",
+            "expect": "reject",
+            "reason": "bad_signature: signed with a key the site does not trust.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "oQl3lUjT1OikcWdwxNqwSYbGM66xWG6q+xq861/uigVKRbZuHf/zRmeVKVKk7ramPPhbB+3low/Duu9MSxZsBQ==",
+                "signed_with": "other_seed"
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "oQl3lUjT1OikcWdwxNqwSYbGM66xWG6q+xq861/uigVKRbZuHf/zRmeVKVKk7ramPPhbB+3low/Duu9MSxZsBQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signed_for_other_site",
+            "expect": "reject",
+            "reason": "bad_signature: signed with another site home_url. Stops a captured request working elsewhere.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://other.example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://other.example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "bovgPoOwoOEpSSyBVxs/aUOiiAlJRj8rXQJCm+kv5sSf3ujW/oHhLXJRiPL3mJXsEtKoD9uMT2f1OiWJtILbBg=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "bovgPoOwoOEpSSyBVxs/aUOiiAlJRj8rXQJCm+kv5sSf3ujW/oHhLXJRiPL3mJXsEtKoD9uMT2f1OiWJtILbBg=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signed_for_other_route",
+            "expect": "reject",
+            "reason": "bad_signature: signed for the update route, sent to the report route.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/update\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "USLWdsuqZNYf+oIkSvZLbtKpiTRtgDL9RnCi18pRQcKzTytoubg9zzNxHBnOWA8rxE1nfVWBT/HxsBPxJ21cBQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "USLWdsuqZNYf+oIkSvZLbtKpiTRtgDL9RnCi18pRQcKzTytoubg9zzNxHBnOWA8rxE1nfVWBT/HxsBPxJ21cBQ=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_signed_lowercase_method",
+            "expect": "reject",
+            "reason": "bad_signature: method must be upper case in the canonical string.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "get",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "get\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "o1NtsXS68Y4mWp00xEt4rsAenKZVaCTa34i5GcUjKWKotF2NJwhA8D1WIP7O4UGHzC7FiunRZKP6V4VYODIEDg=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "o1NtsXS68Y4mWp00xEt4rsAenKZVaCTa34i5GcUjKWKotF2NJwhA8D1WIP7O4UGHzC7FiunRZKP6V4VYODIEDg=="
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "get_report_with_nonce_header",
+            "expect": "reject",
+            "reason": "unexpected_nonce: GET requests must not carry X-SM-Nonce.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "GET\n/sitemanager/v1/report\n1790000000\n\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ=="
+            },
+            "request": {
+                "method": "GET",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "yTeGasSTLDKLqtGno/UDlhePNzoQWR7y4juNTlXfO3AQ88gt99/yWal3tUb3/9wLWGPOG5ohBWPF6kzofuvPCQ==",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a"
+                },
+                "body": ""
+            }
+        },
+        {
+            "name": "post_update_body_tampered",
+            "expect": "reject",
+            "reason": "bad_signature: body changed after signing.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"9.9.9\"}"
+            }
+        },
+        {
+            "name": "post_update_nonce_missing",
+            "expect": "reject",
+            "reason": "missing_header: POST without X-SM-Nonce.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_update_nonce_uppercase",
+            "expect": "reject",
+            "reason": "bad_nonce: nonce must be 32 lower case hex characters.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9F2C1E4B7A6D3C2E1F0A9B8C7D6E5F4A",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9F2C1E4B7A6D3C2E1F0A9B8C7D6E5F4A\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "MfP//8asvWkBoJ6OZgBq9aK6GHdLUYdkcldZvhQZSK8FAbx7A/ARtLzcD8lJCzHVGEV5qrRQwPi8G83lnysUCw=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9F2C1E4B7A6D3C2E1F0A9B8C7D6E5F4A",
+                    "X-SM-Signature": "MfP//8asvWkBoJ6OZgBq9aK6GHdLUYdkcldZvhQZSK8FAbx7A/ARtLzcD8lJCzHVGEV5qrRQwPi8G83lnysUCw==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_update_nonce_short",
+            "expect": "reject",
+            "reason": "bad_nonce: nonce shorter than 32 characters.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "khmVDKwrsVIkUVVOrH5s6P/leNAWvOtOKJJtMiyM3q974ACsHNE1uCfBHfGAnynzGD7Nmu35FWMm8ok9rTDkCQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f",
+                    "X-SM-Signature": "khmVDKwrsVIkUVVOrH5s6P/leNAWvOtOKJJtMiyM3q974ACsHNE1uCfBHfGAnynzGD7Nmu35FWMm8ok9rTDkCQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_update_nonce_replayed",
+            "expect": "reject",
+            "reason": "nonce_used: identical to post_update_valid but the nonce is already in the used set.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": [
+                    "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a"
+                ]
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_update_without_opt_in",
+            "expect": "reject",
+            "reason": "not_opted_in: SM_ALLOW_UPDATES is not defined, so the route does not exist.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": false,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "5GCcR79WhPTL9mqLq6l8tUkjIDlN7n/zcVGHnUnG1I9ASOdFTe8MbaFql8gG0/6TUmCYTDUHLtDfTfT/fhHHDQ==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_update_http_site",
+            "expect": "reject",
+            "reason": "not_https: the site home_url is http, so a write could be read or answered by anyone on the path. Correctly signed, still refused.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "http://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "http://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}",
+                "body_sha256": "ad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "canonical": "POST\n/sitemanager/v1/update\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttp://example.test\nad813b561d3a881f7376eeaeb0069f2b185a73b065b8cc7b2c687a612fd0a435",
+                "signature": "rBmEo52jvLsbEW91vroCII/Ue35NnlQXAV/BKif5WM1eBa6Oh2Ag91PQhZWmu+o4/yz2HBYYJHNw4wHW2fMSCA=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/update",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "rBmEo52jvLsbEW91vroCII/Ue35NnlQXAV/BKif5WM1eBa6Oh2Ag91PQhZWmu+o4/yz2HBYYJHNw4wHW2fMSCA==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"expected_version\":\"3.18.1\"}"
+            }
+        },
+        {
+            "name": "post_rollback_removed",
+            "expect": "reject",
+            "reason": "no_route: the rollback route was removed in agent 1.0.7. Correctly signed, still refused.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/rollback",
+                "timestamp": "1790000000",
+                "nonce": "0123456789abcdef0123456789abcdef",
+                "site_url": "https://example.test",
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"rollback_id\":\"5f1d0c9a7b3e2a41\"}",
+                "body_sha256": "5e7e2b2e2b046a7aedc2c7a1c6ff9c7f62db4987d1f3ce8e054465a1d30a1c3f",
+                "canonical": "POST\n/sitemanager/v1/rollback\n1790000000\n0123456789abcdef0123456789abcdef\nhttps://example.test\n5e7e2b2e2b046a7aedc2c7a1c6ff9c7f62db4987d1f3ce8e054465a1d30a1c3f",
+                "signature": "c/Z8aA6XPrn5C0Kw0OQo9GlLkId3xc4QUU4JIzPR3rgjhl5TU4IVlD2OJGNhBaU8HMzBO3U460kl63h3wjMzAw=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/rollback",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "0123456789abcdef0123456789abcdef",
+                    "X-SM-Signature": "c/Z8aA6XPrn5C0Kw0OQo9GlLkId3xc4QUU4JIzPR3rgjhl5TU4IVlD2OJGNhBaU8HMzBO3U460kl63h3wjMzAw==",
+                    "Content-Type": "application/json"
+                },
+                "body": "{\"type\":\"plugin\",\"item\":\"wp-rocket/wp-rocket.php\",\"rollback_id\":\"5f1d0c9a7b3e2a41\"}"
+            }
+        },
+        {
+            "name": "post_report_wrong_method",
+            "expect": "reject",
+            "reason": "no_route: the report route only accepts GET.",
+            "now": 1790000000,
+            "site": {
+                "home_url": "https://example.test",
+                "allow_updates": true,
+                "used_nonces": []
+            },
+            "signed": {
+                "method": "POST",
+                "route": "/sitemanager/v1/report",
+                "timestamp": "1790000000",
+                "nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                "site_url": "https://example.test",
+                "body": "",
+                "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "canonical": "POST\n/sitemanager/v1/report\n1790000000\n9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a\nhttps://example.test\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "signature": "4fWs7DNLZrjnWeWtG10QdMjw5MWIEP7Dt/tsgSbFs4XdHBqdm6YocNf4NI+SOroQcciAMGmIwwl75B2oNPcLCA=="
+            },
+            "request": {
+                "method": "POST",
+                "route": "/sitemanager/v1/report",
+                "headers": {
+                    "X-SM-Timestamp": "1790000000",
+                    "X-SM-Nonce": "9f2c1e4b7a6d3c2e1f0a9b8c7d6e5f4a",
+                    "X-SM-Signature": "4fWs7DNLZrjnWeWtG10QdMjw5MWIEP7Dt/tsgSbFs4XdHBqdm6YocNf4NI+SOroQcciAMGmIwwl75B2oNPcLCA==",
+                    "Content-Type": "application/json"
+                },
+                "body": ""
+            }
+        }
+    ]
+}

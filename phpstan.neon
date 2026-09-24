@@ -1,0 +1,24 @@
+# PHPStan at level 8 with the WordPress stubs and PHP 7.4 semantics.
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+parameters:
+    level: 8
+    phpVersion: 70400
+    paths:
+        - foundry-toolkit.php
+        - includes
+    scanFiles:
+        - tests/phpstan-constants.php
+        - tests/phpstan-cache-stubs.php
+    treatPhpDocTypesAsCertain: false
+    # wp-config.php decides these per site; the stub values are only defaults.
+    dynamicConstantNames:
+        - FDHARDEN_IS_LOCAL
+        - FDHARDEN_DISALLOW_FILE_MODS
+        - FDHARDEN_DISABLE_XMLRPC
+        - FDHARDEN_DISABLE_COMMENTS
+        - FDHARDEN_DISABLE_FEEDS
+        - FDHARDEN_DISABLE_APP_PASSWORDS
+        - FDHARDEN_LOCK_REGISTRATION
+        # Defined by whichever copy loads first: ours or an old must-use agent.
+        - SITEMANAGER_AGENT_VERSION

@@ -1,0 +1,130 @@
+{
+  "protocol": 1,
+  "agent": {
+    "version": "1.0.0",
+    "php_file": "foundry-toolkit.php",
+    "updates_enabled": true,
+    "toolkit": true,
+    "loader": true,
+    "hardening": true
+  },
+  "generated_at": "2026-09-23T04:12:09Z",
+  "wp": {
+    "version": "6.8.2",
+    "update_version": null,
+    "home_url": "https://example.test",
+    "site_url": "https://example.test",
+    "multisite": false,
+    "language": "en_AU",
+    "timezone": "Australia/Melbourne"
+  },
+  "php": {
+    "version": "8.3.12",
+    "memory_limit": "256M",
+    "extensions": {
+      "sodium": true,
+      "imagick": true,
+      "gd": true,
+      "curl": true,
+      "zip": true
+    }
+  },
+  "theme": {
+    "slug": "achk27",
+    "name": "Art Central 2027",
+    "version": "1.4.0",
+    "update_version": null,
+    "parent": null
+  },
+  "themes": [
+    { "slug": "achk27", "name": "Art Central 2027", "version": "1.4.0", "update_version": null, "active": true, "parent": false },
+    { "slug": "twentytwentyfive", "name": "Twenty Twenty-Five", "version": "1.2", "update_version": null, "active": false, "parent": false }
+  ],
+  "plugins": [
+    {
+      "file": "gravityforms/gravityforms.php",
+      "slug": "gravityforms",
+      "name": "Gravity Forms",
+      "version": "2.9.12",
+      "update_version": "2.9.13",
+      "active": true,
+      "network_active": false,
+      "auto_update": false,
+      "must_use": false
+    },
+    {
+      "file": "wp-rocket/wp-rocket.php",
+      "slug": "wp-rocket",
+      "name": "WP Rocket",
+      "version": "3.18.0",
+      "update_version": "3.18.1",
+      "active": true,
+      "network_active": false,
+      "auto_update": false,
+      "must_use": false
+    },
+    {
+      "file": "wordfence/wordfence.php",
+      "slug": "wordfence",
+      "name": "Wordfence Security",
+      "version": "8.0.5",
+      "update_version": null,
+      "active": true,
+      "network_active": false,
+      "auto_update": true,
+      "must_use": false
+    },
+    {
+      "file": "hello.php",
+      "slug": "hello",
+      "name": "Hello Dolly",
+      "version": "1.7.2",
+      "update_version": null,
+      "active": false,
+      "network_active": false,
+      "auto_update": false,
+      "must_use": false
+    },
+    {
+      "file": "sitemanager-agent.php",
+      "slug": "sitemanager-agent",
+      "name": "Site Manager Agent",
+      "version": "1.0.0",
+      "update_version": null,
+      "active": true,
+      "network_active": false,
+      "auto_update": false,
+      "must_use": true
+    }
+  ],
+  "users": {
+    "administrators": 3,
+    "administrators_with_2fa": 2,
+    "two_factor_source": "wordfence",
+    "has_admin_username": false
+  },
+  "constants": {
+    "DISALLOW_FILE_EDIT": true,
+    "DISALLOW_FILE_MODS": false,
+    "WP_DEBUG": false,
+    "WP_DEBUG_DISPLAY": false,
+    "WP_DEBUG_LOG": false,
+    "FORCE_SSL_ADMIN": true,
+    "WP_AUTO_UPDATE_CORE": true,
+    "AUTOMATIC_UPDATER_DISABLED": false
+  },
+  "security": {
+    "wordfence_firewall_mode": "enabled",
+    "login_path": "/wp-login.php"
+  },
+  "health": {
+    "cron_last_run_at": "2026-09-23T04:05:31Z",
+    "cron_disabled": false,
+    "db_size_bytes": 48234496,
+    "uploads_size_bytes": 2147483648,
+    "recovery_mode": false,
+    "paused_plugins": [],
+    "paused_themes": [],
+    "last_fatal": null
+  }
+}

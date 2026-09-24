@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<ruleset name="FoundryToolkit">
+    <description>WordPress coding standards for Foundry Toolkit.</description>
+    <file>foundry-toolkit.php</file>
+    <file>includes</file>
+    <file>templates</file>
+    <arg name="extensions" value="php"/>
+    <arg value="sp"/>
+    <rule ref="WordPress"/>
+    <config name="minimum_supported_wp_version" value="6.0"/>
+    <config name="testVersion" value="7.4-"/>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="foundry_toolkit"/>
+                <element value="sitemanager"/>
+                <element value="fdharden"/>
+            </property>
+        </properties>
+    </rule>
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array">
+                <element value="foundry-toolkit"/>
+            </property>
+        </properties>
+    </rule>
+</ruleset>

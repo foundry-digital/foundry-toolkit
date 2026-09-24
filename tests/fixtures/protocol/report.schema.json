@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://foundrydigital.com.au/sitemanager/protocol/v1/report.schema.json",
+  "title": "Site Manager agent report, protocol version 1",
+  "description": "Response body of GET /sitemanager/v1/report. See docs/protocol.md section 6. Unknown top-level members are allowed so an agent may add optional data without a new protocol version. The users object forbids unknown members because it must never carry personal data.",
+  "type": "object",
+  "required": ["protocol", "agent", "generated_at", "wp", "php", "theme", "plugins", "users", "constants", "security", "health"],
+  "properties": {
+    "protocol": { "const": 1 },
+    "agent": {
+      "type": "object",
+      "required": ["version", "php_file", "updates_enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "#/$defs/semver" },
+        "php_file": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.php$" },
+        "updates_enabled": { "type": "boolean" },
+        "toolkit": { "type": "boolean", "description": "The agent runs inside the Foundry Toolkit plugin (ADR 0025)." },
+        "loader": { "type": "boolean", "description": "mu-plugins/0-foundry-toolkit.php is present and current, so the toolkit loads before other plugins." },
+        "hardening": { "type": "boolean", "description": "The toolkit's hardening module is running; false while an old foundry-hardening.php mu-plugin is still installed." }
+      }
+    },
+    "generated_at": { "$ref": "#/$defs/rfc3339utc" },
+    "wp": {
+      "type": "object",
+      "required": ["version", "update_version", "home_url", "site_url", "multisite", "language", "timezone"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "#/$defs/version" },
+        "update_version": { "$ref": "#/$defs/versionOrNull" },
+        "home_url": { "$ref": "#/$defs/url" },
+        "site_url": { "$ref": "#/$defs/url" },
+        "multisite": { "type": "boolean" },
+        "language": { "type": "string", "minLength": 2, "maxLength": 20 },
+        "timezone": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "php": {
+      "type": "object",
+      "required": ["version", "memory_limit", "extensions"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "#/$defs/version" },
+        "memory_limit": { "type": "string", "pattern": "^-?[0-9]+[KMGkmg]?$" },
+        "extensions": {
+          "type": "object",
+          "required": ["sodium", "imagick", "gd", "curl", "zip"],
+          "additionalProperties": false,
+          "properties": {
+            "sodium": { "type": "boolean" },
+            "imagick": { "type": "boolean" },
+            "gd": { "type": "boolean" },
+            "curl": { "type": "boolean" },
+            "zip": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "required": ["slug", "name", "version", "update_version", "parent"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "update_version": { "$ref": "#/$defs/versionOrNull" },
+        "parent": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["slug", "name", "version", "update_version"],
+              "additionalProperties": false,
+              "properties": {
+                "slug": { "$ref": "#/$defs/slug" },
+                "name": { "type": "string" },
+                "version": { "type": "string" },
+                "update_version": { "$ref": "#/$defs/versionOrNull" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "themes": {
+      "description": "Every installed theme. Optional: agents before 1.0.6 leave it out.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slug", "name", "version", "update_version", "active", "parent"],
+        "additionalProperties": false,
+        "properties": {
+          "slug": { "$ref": "#/$defs/slug" },
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "update_version": { "$ref": "#/$defs/versionOrNull" },
+          "active": { "type": "boolean" },
+          "parent": { "type": "boolean" }
+        }
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "slug", "name", "version", "update_version", "active", "network_active", "auto_update", "must_use"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\\.php$" },
+          "slug": { "$ref": "#/$defs/slug" },
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "update_version": { "$ref": "#/$defs/versionOrNull" },
+          "active": { "type": "boolean" },
+          "network_active": { "type": "boolean" },
+          "auto_update": { "type": "boolean" },
+          "must_use": { "type": "boolean" }
+        }
+      }
+    },
+    "users": {
+      "type": "object",
+      "description": "Counts and booleans only. Nothing that identifies a person may be added here.",
+      "required": ["administrators", "administrators_with_2fa", "two_factor_source", "has_admin_username"],
+      "additionalProperties": false,
+      "properties": {
+        "administrators": { "type": "integer", "minimum": 0 },
+        "administrators_with_2fa": { "type": "integer", "minimum": 0 },
+        "two_factor_source": { "enum": ["wordfence", "two-factor", "none"] },
+        "has_admin_username": { "type": "boolean" }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "required": ["DISALLOW_FILE_EDIT", "DISALLOW_FILE_MODS", "WP_DEBUG", "WP_DEBUG_DISPLAY", "WP_DEBUG_LOG", "FORCE_SSL_ADMIN", "WP_AUTO_UPDATE_CORE", "AUTOMATIC_UPDATER_DISABLED"],
+      "additionalProperties": false,
+      "properties": {
+        "DISALLOW_FILE_EDIT": { "type": "boolean" },
+        "DISALLOW_FILE_MODS": { "type": "boolean" },
+        "WP_DEBUG": { "type": "boolean" },
+        "WP_DEBUG_DISPLAY": { "type": "boolean" },
+        "WP_DEBUG_LOG": { "type": "boolean" },
+        "FORCE_SSL_ADMIN": { "type": "boolean" },
+        "WP_AUTO_UPDATE_CORE": { "type": "boolean" },
+        "AUTOMATIC_UPDATER_DISABLED": { "type": "boolean" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["wordfence_firewall_mode", "login_path"],
+      "additionalProperties": false,
+      "properties": {
+        "wordfence_firewall_mode": { "enum": ["enabled", "learning", "disabled", null] },
+        "login_path": { "type": "string", "pattern": "^/" }
+      }
+    },
+    "health": {
+      "type": "object",
+      "required": ["cron_last_run_at", "cron_disabled", "db_size_bytes", "uploads_size_bytes", "recovery_mode", "paused_plugins", "paused_themes", "last_fatal"],
+      "additionalProperties": false,
+      "properties": {
+        "cron_last_run_at": { "oneOf": [ { "type": "null" }, { "$ref": "#/$defs/rfc3339utc" } ] },
+        "cron_disabled": { "type": "boolean" },
+        "db_size_bytes": { "type": "integer", "minimum": 0 },
+        "uploads_size_bytes": { "type": "integer", "minimum": -1 },
+        "recovery_mode": { "type": "boolean" },
+        "paused_plugins": { "type": "array", "items": { "type": "string" } },
+        "paused_themes": { "type": "array", "items": { "type": "string" } },
+        "last_fatal": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["at", "message", "file", "line"],
+              "additionalProperties": false,
+              "properties": {
+                "at": { "$ref": "#/$defs/rfc3339utc" },
+                "message": { "type": "string" },
+                "file": { "type": "string" },
+                "line": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "versionOrNull": { "oneOf": [ { "type": "null" }, { "type": "string", "minLength": 1, "maxLength": 64 } ] },
+    "slug": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "url": { "type": "string", "pattern": "^https?://[^/\\s]+(/[^\\s]*)?$", "maxLength": 2048 },
+    "rfc3339utc": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" }
+  }
+}
