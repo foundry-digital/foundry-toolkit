@@ -108,7 +108,9 @@ unset( $foundry_toolkit_plugin );
 		if ( ! is_dir( $dir ) && ! mkdir( $dir, 0755, true ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- must-use folder, written directly like ManageWP Worker.
 			return false;
 		}
-		$tmp = $dir . '/.' . self::FILE . '.' . getmypid() . '.tmp';
+		// A random name, not the process id: hosts such as Kinsta disable the
+		// process id function, and calling a disabled function is fatal on PHP 8.
+		$tmp = $dir . '/.' . self::FILE . '.' . str_replace( '.', '', uniqid( '', true ) ) . '.tmp';
 		if ( false === file_put_contents( $tmp, self::contents( self::plugin_basename() ) ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- as above.
 			return false;
 		}

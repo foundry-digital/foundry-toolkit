@@ -1091,7 +1091,9 @@ final class SiteManager_Agent {
 			self::load_updater_code();
 			$skin     = new Automatic_Upgrader_Skin();
 			$upgrader = self::upgrader( $type, $skin );
-			set_time_limit( 300 ); // phpcs:ignore -- P36: ignore failure of this call.
+			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
+				set_time_limit( 300 ); // phpcs:ignore -- P36: ignore failure of this call.
+			}
 			if ( 'translation' === $type ) {
 				$result = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( $offer ) : false;
 			} elseif ( 'core' === $type ) {
@@ -1167,7 +1169,9 @@ final class SiteManager_Agent {
 		if ( false !== get_transient( self::LOCK_TRANSIENT ) ) {
 			return self::fail( 'sm_busy', 'An update is running; check again when it has finished.', 409 );
 		}
-		set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
+		if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
+			set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
+		}
 		if ( class_exists( 'Foundry_Toolkit_Updater' ) ) {
 			Foundry_Toolkit_Updater::forget();
 		}
@@ -1302,8 +1306,12 @@ final class SiteManager_Agent {
 		try {
 			self::remove_old_stores();
 			self::load_updater_code();
-			set_time_limit( 600 ); // phpcs:ignore -- ignore failure of this call.
-			ignore_user_abort( true );
+			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
+				set_time_limit( 600 ); // phpcs:ignore -- ignore failure of this call.
+			}
+			if ( function_exists( 'ignore_user_abort' ) ) { // As above.
+				ignore_user_abort( true );
+			}
 
 			// 1. Check every item before anything changes.
 			$results   = array();
