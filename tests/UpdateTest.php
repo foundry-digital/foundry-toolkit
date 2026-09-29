@@ -510,11 +510,11 @@ final class UpdateTest extends UpdateSupport {
 		);
 		SiteManager_Agent::$updates_override = false;
 		SiteManager_Agent::register_routes();
-		$this->assertSame( array( '/report' ), $routes );
+		$this->assertSame( array( '/report', '/integrity' ), $routes, 'the read routes only (S2, P64)' );
 
 		$routes                              = array();
 		SiteManager_Agent::$updates_override = true;
 		SiteManager_Agent::register_routes();
-		$this->assertSame( array( '/report', '/update', '/check', '/caches' ), $routes, 'no /cache route since 1.0.4, no rollback route since 1.0.7; check since 1.3.2; /caches since 1.4.0' );
+		$this->assertSame( array( '/report', '/integrity', '/update', '/check', '/caches' ), $routes, 'no /cache route since 1.0.4, no rollback route since 1.0.7; check since 1.3.2; /caches since 1.4.0; /integrity since 1.5.0' );
 	}
 }
