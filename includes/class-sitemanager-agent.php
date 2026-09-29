@@ -194,6 +194,17 @@ final class SiteManager_Agent {
 				'permission_callback' => array( __CLASS__, 'permission' ),
 			)
 		);
+		// P64: read only, so registered always, like the report.
+		require_once __DIR__ . '/class-foundry-toolkit-integrity.php';
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/integrity',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( 'Foundry_Toolkit_Integrity', 'route' ),
+				'permission_callback' => array( __CLASS__, 'permission' ),
+			)
+		);
 		if ( ! self::updates_enabled() ) {
 			return; // P32, S2: without the opt-in the POST routes do not exist.
 		}

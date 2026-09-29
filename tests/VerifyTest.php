@@ -122,9 +122,10 @@ final class VerifyTest extends TestCase {
 
 	public function test_post_routes_absent_without_opt_in(): void {
 		// SM_ALLOW_UPDATES is not defined in the test process, so only the
-		// report route may be registered (S2).
+		// read routes may be registered: the report and integrity (S2, P64).
 		$this->assertFalse( SiteManager_Agent::updates_enabled() );
 		Functions\expect( 'register_rest_route' )->once()->with( 'sitemanager/v1', '/report', Mockery::type( 'array' ) );
+		Functions\expect( 'register_rest_route' )->once()->with( 'sitemanager/v1', '/integrity', Mockery::on( fn( array $a ) => 'GET' === $a['methods'] ) );
 		SiteManager_Agent::register_routes();
 	}
 
