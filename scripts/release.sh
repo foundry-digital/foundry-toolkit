@@ -37,8 +37,13 @@ git fetch -q origin main
 # while the tree is still clean.
 PUB=$(ssh "$SM_DEPLOY_HOST" 'sudo -u sitemanager /usr/local/bin/sitemanager public-key /var/lib/sitemanager') ||
 	die "could not read Site Manager's public key on $SM_DEPLOY_HOST"
-# Base64 only, since make zip puts it into the plugin with sed.
-echo "$PUB" | grep -Eq '^[A-Za-z0-9+/]{43}=$' || die "unexpected public key from $SM_DEPLOY_HOST: $PUB"
+# Base64 only, one line, 44 characters (32 bytes), since make zip puts it
+# into the plugin with sed. A case test sees the whole value, newlines and
+# all, where grep would pass any one good line.
+case "$PUB" in
+	*[!A-Za-z0-9+/=]* | '') die "unexpected public key from $SM_DEPLOY_HOST" ;;
+esac
+[ "${#PUB}" -eq 44 ] || die "unexpected public key length from $SM_DEPLOY_HOST: ${#PUB}"
 
 # The version lives in the plugin header and in the constant.
 sed -i '' \

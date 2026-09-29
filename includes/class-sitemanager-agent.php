@@ -1224,6 +1224,9 @@ final class SiteManager_Agent {
 			return self::fail( 'sm_busy', 'An update is running; clear the caches when it has finished.', 409 );
 		}
 		try {
+			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
+				set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
+			}
 			$caches = self::clear_caches( array() );
 		} finally {
 			self::release_lock();
