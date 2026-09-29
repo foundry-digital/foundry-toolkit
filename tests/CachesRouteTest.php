@@ -217,7 +217,7 @@ final class CachesRouteTest extends UpdateSupport {
 		$this->assertSame( array( 'loopback', 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
 		$this->assertSame( array( 'wp_rocket_upgrade', 'wp_rocket', 'rocket_cdn' ), array_column( $caches, 'name' ) );
 		$this->assertSame( array( 'failed', 'cleared', 'cleared' ), array_column( $caches, 'status' ) );
-		$this->assertSame( "WP Rocket's upgrade from 3.23.3.3 to 3.23.4 is still pending after the loopback (HTTP 403).", $caches[0]['detail'] );
+		$this->assertSame( 'still pending after the loopback (HTTP 403), 3.23.3.3 to 3.23.4', $caches[0]['detail'] );
 	}
 
 	/** A loopback that throws is reported the same way. */

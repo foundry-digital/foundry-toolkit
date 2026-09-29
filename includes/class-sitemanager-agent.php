@@ -1292,7 +1292,7 @@ final class SiteManager_Agent {
 		return array(
 			'name'   => 'wp_rocket_upgrade',
 			'status' => 'failed',
-			'detail' => 'WP Rocket\'s upgrade from ' . $stored . ' to ' . $tools['current'] . ' is still pending after the loopback (' . ( '' !== $answer ? $answer : 'no answer' ) . ').',
+			'detail' => 'still pending after the loopback (' . ( '' !== $answer ? $answer : 'no answer' ) . '), ' . $stored . ' to ' . $tools['current'],
 		);
 	}
 
