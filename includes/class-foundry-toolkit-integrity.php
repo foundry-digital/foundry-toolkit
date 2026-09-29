@@ -30,6 +30,9 @@ final class Foundry_Toolkit_Integrity {
 	public const CORE_TTL   = 6 * HOUR_IN_SECONDS;
 	public const PLUGIN_TTL = 12 * HOUR_IN_SECONDS;
 
+	/** The option prefix for a premium plugin's or a theme's baseline (1.7.0). */
+	public const BASELINE_OPTION = 'sm_integrity_base_';
+
 	/** Core files never checked: hardening often removes them, and none runs. */
 	private const CORE_IGNORED = array( 'readme.html', 'license.txt', 'wp-config-sample.php' );
 
@@ -68,6 +71,20 @@ final class Foundry_Toolkit_Integrity {
 	 * @var callable|null
 	 */
 	public static $plugins = null;
+
+	/**
+	 * Returns the installed themes, stylesheet => version.
+	 *
+	 * @var callable|null
+	 */
+	public static $themes = null;
+
+	/**
+	 * The themes directory, for tests; null means get_theme_root().
+	 *
+	 * @var string|null
+	 */
+	public static $theme_root = null;
 
 	/**
 	 * Returns the time in seconds, for the budget.
@@ -115,6 +132,7 @@ final class Foundry_Toolkit_Integrity {
 			'modified'    => array(),
 			'missing'     => array(),
 			'unexpected'  => array(),
+			'others'      => array(),
 			'truncated'   => false,
 			'duration_ms' => 0,
 		);
@@ -155,6 +173,19 @@ final class Foundry_Toolkit_Integrity {
 				'files'   => $result['files'],
 			);
 			self::merge( $out, $result );
+			if ( ! $result['checked'] ) {
+				// Premium or custom: its own first copy, and a fingerprint for
+				// the fleet (1.7.0).
+				self::check_other( $out, 'plugin', $slug, $plugin_version, self::plugin_root() . '/' . $slug, 'wp-content/plugins/' . $slug . '/' );
+			}
+		}
+
+		foreach ( self::installed_themes() as $slug => $theme_version ) {
+			if ( self::now() - $started > self::BUDGET ) {
+				$out['complete'] = false;
+				break;
+			}
+			self::check_other( $out, 'theme', $slug, $theme_version, self::theme_root() . '/' . $slug, 'wp-content/themes/' . $slug . '/' );
 		}
 
 		foreach ( array( 'modified', 'missing', 'unexpected' ) as $list ) {
@@ -165,6 +196,117 @@ final class Foundry_Toolkit_Integrity {
 		}
 		$out['duration_ms'] = (int) round( ( self::now() - $started ) * 1000 );
 		return $out;
+	}
+
+	/**
+	 * A premium or custom plugin, or a theme, against its own first copy
+	 * (1.7.0): the first time a version is seen, the MD5 of each PHP, JS and
+	 * .htaccess file is recorded on the site; later checks list what changed
+	 * while the version stayed the same. A new version records a new
+	 * baseline. Adds a fingerprint of the files for the fleet comparison.
+	 *
+	 * @param array<string, mixed> $out     The response.
+	 * @param string               $kind    plugin or theme.
+	 * @param string               $slug    Directory.
+	 * @param string               $version Installed version.
+	 * @param string               $dir     Directory path.
+	 * @param string               $prefix  Path prefix to report, relative to the WordPress root.
+	 * @return void
+	 */
+	private static function check_other( array &$out, $kind, $slug, $version, $dir, $prefix ) {
+		$result          = self::cached(
+			'sm_integrity_o_' . md5( $kind . '|' . $slug . '|' . $version ),
+			self::PLUGIN_TTL,
+			static function () use ( $kind, $slug, $version, $dir, $prefix ) {
+				$files   = self::watched_files( $dir );
+				$result  = self::empty_result();
+				$key     = self::BASELINE_OPTION . md5( $kind . '/' . $slug );
+				$stored  = get_option( $key, null );
+				$compare = is_array( $stored ) && isset( $stored['version'], $stored['files'] ) && $stored['version'] === $version && is_array( $stored['files'] );
+				if ( ! $compare ) {
+					update_option(
+						$key,
+						array(
+							'version' => $version,
+							'files'   => $files,
+							'at'      => gmdate( 'c' ),
+						),
+						false
+					);
+					$stored = array( 'files' => $files );
+				}
+				foreach ( $stored['files'] as $path => $md5 ) {
+					if ( ! isset( $files[ $path ] ) ) {
+						$result['missing'][] = $prefix . $path;
+					} elseif ( $files[ $path ] !== $md5 ) {
+						$result['modified'][] = $prefix . $path;
+					}
+				}
+				foreach ( $files as $path => $md5 ) {
+					if ( ! isset( $stored['files'][ $path ] ) ) {
+						$result['unexpected'][] = $prefix . $path;
+					}
+				}
+				$result['checked']     = true;
+				$result['files']       = count( $files );
+				$result['baseline']    = $compare ? 'compared' : 'recorded';
+				$result['fingerprint'] = self::fingerprint( $files );
+				return $result;
+			}
+		);
+		$out['others'][] = array(
+			'kind'        => $kind,
+			'slug'        => $slug,
+			'version'     => $version,
+			'files'       => $result['files'],
+			'baseline'    => isset( $result['baseline'] ) ? $result['baseline'] : 'recorded',
+			'fingerprint' => isset( $result['fingerprint'] ) ? $result['fingerprint'] : '',
+		);
+		self::merge( $out, $result );
+	}
+
+	/**
+	 * The MD5 of every PHP, JS and .htaccess file under a directory, by path
+	 * relative to it: where injected code lives. Other files (images, CSS a
+	 * plugin builds for itself) never count.
+	 *
+	 * @param string $dir Directory.
+	 * @return array<string, string>
+	 */
+	private static function watched_files( $dir ) {
+		$out = array();
+		if ( ! is_dir( $dir ) ) {
+			return $out;
+		}
+		$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ) );
+		foreach ( $it as $file ) {
+			if ( ! $file instanceof SplFileInfo || ! $file->isFile() ) {
+				continue;
+			}
+			$ext = strtolower( $file->getExtension() );
+			if ( ! in_array( $ext, array( 'php', 'phtml', 'js' ), true ) && '.htaccess' !== $file->getFilename() ) {
+				continue;
+			}
+			$path         = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
+			$out[ $path ] = (string) md5_file( $file->getPathname() );
+		}
+		ksort( $out );
+		return $out;
+	}
+
+	/**
+	 * One SHA-256 over a file list and its MD5s: identical copies of a
+	 * version give the same fingerprint on every site (P65).
+	 *
+	 * @param array<string, string> $files Path => MD5, sorted.
+	 * @return string
+	 */
+	private static function fingerprint( array $files ) {
+		$lines = '';
+		foreach ( $files as $path => $md5 ) {
+			$lines .= $path . "\t" . $md5 . "\n";
+		}
+		return hash( 'sha256', $lines );
 	}
 
 	/**
@@ -385,6 +527,31 @@ final class Foundry_Toolkit_Integrity {
 			$out[ (string) $file ] = isset( $data['Version'] ) ? (string) $data['Version'] : '';
 		}
 		return $out;
+	}
+
+	/**
+	 * Installed themes, stylesheet => version.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function installed_themes() {
+		if ( is_callable( self::$themes ) ) {
+			return call_user_func( self::$themes );
+		}
+		$out = array();
+		foreach ( wp_get_themes() as $stylesheet => $theme ) {
+			$out[ (string) $stylesheet ] = (string) $theme->get( 'Version' );
+		}
+		return $out;
+	}
+
+	/**
+	 * The themes directory, without a trailing slash.
+	 *
+	 * @return string
+	 */
+	private static function theme_root() {
+		return null !== self::$theme_root ? self::$theme_root : (string) get_theme_root();
 	}
 
 	/**

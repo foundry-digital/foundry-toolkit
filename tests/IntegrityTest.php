@@ -34,11 +34,26 @@ final class IntegrityTest extends UpdateSupport {
 	/** @var float */
 	private $time = 0.0;
 
+	/** @var array<string, mixed> */
+	private $options = array();
+
+	/** @var array<string, string> */
+	private $themes = array();
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->site_root = sys_get_temp_dir() . '/sm-integrity-' . uniqid() . '/';
 		$this->fetched   = array();
 		$this->time      = 0.0;
+		$this->options   = array();
+		$this->themes    = array();
+		Functions\when( 'get_option' )->alias( fn( string $k, $d = false ) => $this->options[ $k ] ?? $d );
+		Functions\when( 'update_option' )->alias(
+			function ( string $k, $v ): bool {
+				$this->options[ $k ] = $v;
+				return true;
+			}
+		);
 		Functions\when( 'get_bloginfo' )->justReturn( '6.8.2' );
 		Functions\when( 'get_locale' )->justReturn( 'en_AU' );
 
@@ -75,6 +90,8 @@ final class IntegrityTest extends UpdateSupport {
 		};
 		Foundry_Toolkit_Integrity::$plugins          = fn() => $this->installed;
 		Foundry_Toolkit_Integrity::$clock            = fn() => $this->time;
+		Foundry_Toolkit_Integrity::$themes           = fn() => $this->themes;
+		Foundry_Toolkit_Integrity::$theme_root       = $this->site_root . 'wp-content/themes';
 	}
 
 	protected function tearDown(): void {
@@ -84,6 +101,8 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$plugin_checksums = null;
 		Foundry_Toolkit_Integrity::$plugins          = null;
 		Foundry_Toolkit_Integrity::$clock            = null;
+		Foundry_Toolkit_Integrity::$themes           = null;
+		Foundry_Toolkit_Integrity::$theme_root       = null;
 		$this->rm( rtrim( $this->site_root, '/' ) );
 		parent::tearDown();
 	}
@@ -187,5 +206,68 @@ final class IntegrityTest extends UpdateSupport {
 		$out = Foundry_Toolkit_Integrity::run();
 		$this->assertCount( Foundry_Toolkit_Integrity::MAX_PATHS, $out['unexpected'] );
 		$this->assertTrue( $out['truncated'] );
+	}
+
+	/** Forget the cached results, as twelve hours passing would. */
+	private function expire(): void {
+		foreach ( array_keys( $this->transients ) as $k ) {
+			if ( 0 === strpos( (string) $k, 'sm_integrity_' ) ) {
+				unset( $this->transients[ $k ] );
+			}
+		}
+	}
+
+	/**
+	 * 1.7.0: a premium plugin and a theme are checked against their own first
+	 * copy. The first check records it; a later one names what changed
+	 * while the version stayed; a new version records a new baseline.
+	 */
+	public function test_premium_and_themes_against_their_first_copy(): void {
+		$this->put( 'wp-content/plugins/wp-rocket/inc/cache.php', '<?php // cache' );
+		$this->put( 'wp-content/plugins/wp-rocket/assets/app.js', 'console.log(1)' );
+		$this->put( 'wp-content/plugins/wp-rocket/assets/logo.png', 'PNG' );
+		$this->put( 'wp-content/themes/hello-child/functions.php', '<?php // child' );
+		$this->themes                     = array( 'hello-child' => '1.0' );
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0; // no budget pressure here
+
+		$first  = Foundry_Toolkit_Integrity::run();
+		$others = array();
+		foreach ( $first['others'] as $o ) {
+			$others[ $o['kind'] . '/' . $o['slug'] ] = $o;
+		}
+		$this->assertSame( 'recorded', $others['plugin/wp-rocket']['baseline'] );
+		$this->assertSame( 3, $others['plugin/wp-rocket']['files'], 'php and js only, no png' );
+		$this->assertSame( 'recorded', $others['theme/hello-child']['baseline'] );
+		$this->assertSame( 64, strlen( $others['plugin/wp-rocket']['fingerprint'] ) );
+		$this->assertSame( array(), $first['modified'] );
+
+		$this->put( 'wp-content/plugins/wp-rocket/inc/cache.php', '<?php eval($_GET[1]);' );
+		$this->put( 'wp-content/plugins/wp-rocket/inc/x.php', '<?php // dropped' );
+		$this->put( 'wp-content/plugins/wp-rocket/assets/logo.png', 'changed image, never counted' );
+		unlink( $this->site_root . 'wp-content/themes/hello-child/functions.php' );
+		$this->expire();
+		$second = Foundry_Toolkit_Integrity::run();
+		$this->assertSame( array( 'wp-content/plugins/wp-rocket/inc/cache.php' ), $second['modified'] );
+		$this->assertSame( array( 'wp-content/plugins/wp-rocket/inc/x.php' ), $second['unexpected'] );
+		$this->assertSame( array( 'wp-content/themes/hello-child/functions.php' ), $second['missing'] );
+		$this->assertNotSame( $others['plugin/wp-rocket']['fingerprint'], $second['others'][0]['fingerprint'] );
+		$json = (string) json_encode( $second );
+		$this->assertStringNotContainsString( md5( '<?php eval($_GET[1]);' ), $json, 'S14: no per-file checksum' );
+
+		$this->installed['wp-rocket/wp-rocket.php'] = '3.19.0';
+		$this->expire();
+		$third = Foundry_Toolkit_Integrity::run();
+		$this->assertSame( 'recorded', $third['others'][0]['baseline'], 'a new version records a new baseline' );
+		$this->assertNotContains( 'wp-content/plugins/wp-rocket/inc/cache.php', $third['modified'] );
+	}
+
+	/** Identical copies give identical fingerprints, whatever order the disk lists them in. */
+	public function test_fingerprint_is_stable(): void {
+		$this->put( 'wp-content/plugins/wp-rocket/b.php', '<?php // b' );
+		$this->put( 'wp-content/plugins/wp-rocket/a.php', '<?php // a' );
+		$one = Foundry_Toolkit_Integrity::run()['others'][0]['fingerprint'];
+		$this->expire();
+		$this->options = array();
+		$this->assertSame( $one, Foundry_Toolkit_Integrity::run()['others'][0]['fingerprint'] );
 	}
 }
