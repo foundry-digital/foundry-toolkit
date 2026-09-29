@@ -49,7 +49,9 @@ Define `FOUNDRY_TOOLKIT_PRERELEASES` as `true` in `wp-config.php` on a test site
 make release VERSION=1.2.1
 ```
 
-`scripts/release.sh` sets the version, runs `make check`, commits, builds the zip with Site Manager's public key baked in, signs it with Site Manager's private key (`sitemanager sign-release`, which never leaves the Mac), tags, pushes and creates the GitHub release with `foundry-toolkit.zip` and `foundry-toolkit.zip.sig`. It needs the Site Manager app installed (`make app` in site-manager) and `gh` signed in.
+`scripts/release.sh` reads Site Manager's public key on the server (`ssh sitemanager 'sudo -u sitemanager /usr/local/bin/sitemanager public-key /var/lib/sitemanager'`), sets the version, runs `make check`, commits, builds the zip with that public key baked in, signs it on the server with Site Manager's `deploy/sign-release.sh` (the zip goes to the server and the signature comes back; the private key never leaves `/var/lib/sitemanager`), tags, pushes and creates the GitHub release with `foundry-toolkit.zip` and `foundry-toolkit.zip.sig`.
+
+It needs `ssh sitemanager` to work (the same alias Site Manager's `make deploy` uses), a Site Manager checkout at `~/Projects/go/site-manager`, and `gh` signed in. `SM_DEPLOY_HOST` names a different ssh destination and `SITEMANAGER_REPO` a different checkout, for example `SITEMANAGER_REPO=~/src/site-manager make release VERSION=1.4.0`.
 
 ## Development
 

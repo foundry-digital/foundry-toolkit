@@ -204,6 +204,15 @@ final class SiteManager_Agent {
 				'permission_callback' => array( __CLASS__, 'permission' ),
 			)
 		);
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/caches',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'caches' ),
+				'permission_callback' => array( __CLASS__, 'permission' ),
+			)
+		);
 	}
 
 	/**
@@ -1193,6 +1202,44 @@ final class SiteManager_Agent {
 	}
 
 	/**
+	 * POST /caches (P63): clear WP Rocket and then the Rocket.net CDN, the
+	 * P39b steps without Elementor. Site Manager calls it only from James's
+	 * click or inside the update batch he started, after the site has
+	 * settled (A7). It holds the update lock while it clears, so an update
+	 * cannot replace WP Rocket's files mid-clear, and answers sm_busy while
+	 * an update holds it.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function caches( $request ) {
+		$started = microtime( true );
+		// The body is exactly {}: decoded without the assoc flag, so [] and
+		// {} stay apart.
+		$decoded = json_decode( (string) $request->get_body() );
+		if ( ! $decoded instanceof stdClass || array() !== get_object_vars( $decoded ) ) {
+			return self::fail( 'sm_bad_request', 'The body must be the empty JSON object {}.', 400 );
+		}
+		if ( ! self::take_lock( (string) $request->get_header( 'x_sm_nonce' ) ) ) {
+			return self::fail( 'sm_busy', 'An update is running; clear the caches when it has finished.', 409 );
+		}
+		try {
+			$caches = self::clear_caches( array() );
+		} finally {
+			self::release_lock();
+		}
+		$response = new WP_REST_Response(
+			array(
+				'ok'          => true,
+				'caches'      => $caches,
+				'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ),
+			)
+		);
+		$response->header( 'Cache-Control', 'no-store' );
+		return $response;
+	}
+
+	/**
 	 * Check one item of a batch (P33b): its shape, and nothing but type,
 	 * item and expected_version (S1: no URL, package or version to install).
 	 *
@@ -1502,7 +1549,7 @@ final class SiteManager_Agent {
 	 * and library when Elementor or Elementor Pro was updated, then WP Rocket, then
 	 * the Rocket.net CDN last so it refills from fresh pages. Only tools
 	 * that are installed are listed. A failed clear is reported, never
-	 * fatal: the update itself worked.
+	 * fatal: the update itself worked. /caches (P63) calls it with no items.
 	 *
 	 * @param string[] $items The plugin files just updated.
 	 * @return array<int, array{name: string, status: string, detail: string}>
