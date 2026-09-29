@@ -1691,6 +1691,11 @@ final class SiteManager_Agent {
 		if ( isset( $tools['rocket_cdn'] ) ) {
 			$out[] = self::run_cache_step( 'rocket_cdn', $tools['rocket_cdn'] );
 		}
+		if ( isset( $tools['kinsta'] ) ) {
+			// Last, so Kinsta's page cache and CDN are emptied after the page
+			// builders and WP Rocket have rebuilt their files (1.6.0).
+			$out[] = self::run_cache_step( 'kinsta', $tools['kinsta'] );
+		}
 		return $out;
 	}
 
@@ -1735,6 +1740,7 @@ final class SiteManager_Agent {
 			'wp_rocket'         => null,
 			'rocket_cdn'        => null,
 			'mute_cdn'          => null,
+			'kinsta'            => null,
 		);
 		$files = class_exists( '\Elementor\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ? \Elementor\Plugin::$instance->files_manager : null;
 		if ( null !== $files ) {
@@ -1793,7 +1799,47 @@ final class SiteManager_Agent {
 				}
 			};
 		}
+		$kinsta = self::kinsta_purge();
+		if ( null !== $kinsta ) {
+			// Kinsta's MU plugin: its object cache, then its page cache, then
+			// its CDN, each checked the way `wp kinsta cache purge` checks them.
+			// Kinsta itself purges nothing on a plugin update.
+			$tools['kinsta'] = static function () use ( $kinsta ) {
+				$failed = array();
+				if ( method_exists( $kinsta, 'purge_complete_object_cache' ) && true !== $kinsta->purge_complete_object_cache() ) {
+					$failed[] = 'object cache';
+				}
+				foreach ( array(
+					'page cache' => 'purge_complete_site_cache',
+					'CDN'        => 'purge_complete_cdn_cache',
+				) as $label => $method ) {
+					if ( ! method_exists( $kinsta, $method ) ) {
+						continue;
+					}
+					$answer = $kinsta->$method();
+					if ( is_wp_error( $answer ) || 200 !== (int) wp_remote_retrieve_response_code( $answer ) ) {
+						$failed[] = $label;
+					}
+				}
+				return array() === $failed ? true : 'Kinsta did not clear its ' . implode( ', ', $failed ) . '.';
+			};
+		}
 		return $tools;
+	}
+
+	/**
+	 * Kinsta's cache purger, from its MU plugin, or null off Kinsta. It
+	 * exists from the MU plugin's init, which has run before any REST
+	 * request.
+	 *
+	 * @return object|null
+	 */
+	private static function kinsta_purge() {
+		global $kinsta_cache;
+		if ( ! is_object( $kinsta_cache ) || ! isset( $kinsta_cache->kinsta_cache_purge ) || ! is_object( $kinsta_cache->kinsta_cache_purge ) ) {
+			return null;
+		}
+		return $kinsta_cache->kinsta_cache_purge;
 	}
 
 	/**
