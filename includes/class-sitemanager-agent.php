@@ -69,6 +69,17 @@ final class SiteManager_Agent {
 	public static $cache_tools = null;
 
 	/**
+	 * Test seam for WP Rocket's pending upgrade before /caches clears (P63):
+	 * current is the WP Rocket version loaded, stored answers the version
+	 * WP Rocket last recorded, and loopback requests admin-ajax.php and
+	 * answers what came back ("HTTP 400", or the request error). Null finds
+	 * the real ones, or none when WP Rocket is not loaded.
+	 *
+	 * @var array{current: string, stored: callable(): string, loopback: callable(): string}|null
+	 */
+	public static $rocket_upgrade = null;
+
+	/**
 	 * Test seam: builds the report returned with a batch update. Null builds
 	 * the real one.
 	 *
@@ -1227,7 +1238,11 @@ final class SiteManager_Agent {
 			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
 				set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
 			}
-			$caches = self::clear_caches( array() );
+			$upgrade = self::settle_rocket();
+			$caches  = self::clear_caches( array() );
+			if ( null !== $upgrade ) {
+				array_unshift( $caches, $upgrade );
+			}
 		} finally {
 			self::release_lock();
 		}
@@ -1240,6 +1255,85 @@ final class SiteManager_Agent {
 		);
 		$response->header( 'Cache-Control', 'no-store' );
 		return $response;
+	}
+
+	/**
+	 * Let WP Rocket run a pending upgrade before /caches clears (P63, ADR
+	 * 0033). WP Rocket upgrades on admin_init, and loads its upgrader and
+	 * most of its upgrade handlers only in wp-admin, so a REST request can
+	 * neither see nor safely run it. A loopback to admin-ajax.php is a
+	 * wp-admin request that needs no login, so WP Rocket's whole upgrade runs
+	 * there, the way it would on James's next wp-admin visit.
+	 *
+	 * @return array{name: string, status: string, detail: string}|null The entry, or null when no upgrade is pending.
+	 */
+	private static function settle_rocket() {
+		$tools = is_array( self::$rocket_upgrade ) ? self::$rocket_upgrade : self::rocket_upgrade_tools();
+		if ( null === $tools ) {
+			return null;
+		}
+		$stored = $tools['stored']();
+		// An empty stored version is a first install, which is not ours to start.
+		if ( '' === $stored || $stored === $tools['current'] ) {
+			return null;
+		}
+		try {
+			$answer = $tools['loopback']();
+		} catch ( Throwable $e ) {
+			$answer = $e->getMessage();
+		}
+		if ( $tools['stored']() === $tools['current'] ) {
+			return array(
+				'name'   => 'wp_rocket_upgrade',
+				'status' => 'cleared',
+				'detail' => '',
+			);
+		}
+		return array(
+			'name'   => 'wp_rocket_upgrade',
+			'status' => 'failed',
+			'detail' => 'WP Rocket\'s upgrade from ' . $stored . ' to ' . $tools['current'] . ' is still pending after the loopback (' . ( '' !== $answer ? $answer : 'no answer' ) . ').',
+		);
+	}
+
+	/**
+	 * The real WP Rocket version, stored version and loopback, or null when
+	 * WP Rocket is not loaded.
+	 *
+	 * @return array{current: string, stored: callable(): string, loopback: callable(): string}|null
+	 */
+	private static function rocket_upgrade_tools() {
+		if ( ! defined( 'WP_ROCKET_VERSION' ) ) {
+			return null;
+		}
+		$slug = defined( 'WP_ROCKET_SLUG' ) ? (string) constant( 'WP_ROCKET_SLUG' ) : 'wp_rocket_settings';
+		return array(
+			'current'  => (string) constant( 'WP_ROCKET_VERSION' ),
+			'stored'   => static function () use ( $slug ) {
+				// The loopback wrote the option in another request, so read
+				// it afresh rather than from this request's cache.
+				wp_cache_delete( 'alloptions', 'options' );
+				wp_cache_delete( $slug, 'options' );
+				$options = get_option( $slug );
+				return is_array( $options ) && isset( $options['version'] ) && is_string( $options['version'] ) ? $options['version'] : '';
+			},
+			'loopback' => static function () {
+				$response = wp_remote_get(
+					add_query_arg( 'action', 'sitemanager_settle', admin_url( 'admin-ajax.php' ) ),
+					array(
+						'timeout'   => 20,
+						'blocking'  => true,
+						'headers'   => array( 'Cache-Control' => 'no-cache' ),
+						// The filter Site Health's loopback check uses.
+						'sslverify' => (bool) apply_filters( 'https_local_ssl_verify', false ), // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core's filter.
+					)
+				);
+				if ( is_wp_error( $response ) ) {
+					return $response->get_error_message();
+				}
+				return 'HTTP ' . wp_remote_retrieve_response_code( $response );
+			},
+		);
 	}
 
 	/**

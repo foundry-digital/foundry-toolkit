@@ -25,8 +25,28 @@ final class CachesRouteTest extends UpdateSupport {
 	}
 
 	protected function tearDown(): void {
-		SiteManager_Agent::$cache_tools = null;
+		SiteManager_Agent::$cache_tools    = null;
+		SiteManager_Agent::$rocket_upgrade = null;
 		parent::tearDown();
+	}
+
+	/**
+	 * WP Rocket 3.23.4 loaded, with $stored recorded. The loopback records
+	 * its call, then records $after as WP Rocket's upgrade would, and
+	 * answers $answer.
+	 */
+	private function rocket( string $stored, string $after = '3.23.4', string $answer = 'HTTP 400' ): void {
+		SiteManager_Agent::$rocket_upgrade = array(
+			'current'  => '3.23.4',
+			'stored'   => function () use ( &$stored ): string {
+				return $stored;
+			},
+			'loopback' => function () use ( &$stored, $after, $answer ): string {
+				$this->calls[] = 'loopback';
+				$stored        = $after;
+				return $answer;
+			},
+		);
 	}
 
 	/**
@@ -170,6 +190,72 @@ final class CachesRouteTest extends UpdateSupport {
 		$this->assertSame( array( 'failed', 'cleared' ), array_column( $caches, 'status' ) );
 		$this->assertSame( 'disk full', $caches[0]['detail'] );
 		$this->assertSame( array( 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls, 'the CDN plugin is always unmuted' );
+	}
+
+	/**
+	 * P63, ADR 0033: WP Rocket upgrades on admin_init, which a REST request
+	 * never fires, so a pending upgrade is run first by a loopback to
+	 * admin-ajax.php, and reported ahead of the clears.
+	 */
+	public function test_pending_rocket_upgrade_runs_first_by_loopback(): void {
+		$this->tools();
+		$this->rocket( '3.23.3.3' );
+		$caches = $this->caches( $this->clear() );
+		$this->assertSame( array( 'loopback', 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
+		$this->assertSame( array( 'wp_rocket_upgrade', 'wp_rocket', 'rocket_cdn' ), array_column( $caches, 'name' ) );
+		$this->assertSame( array( 'cleared', 'cleared', 'cleared' ), array_column( $caches, 'status' ) );
+		$this->assertSame( '', $caches[0]['detail'] );
+	}
+
+	/** An upgrade still pending after the loopback is reported; the clears still run. */
+	public function test_rocket_upgrade_still_pending_is_reported(): void {
+		$this->tools();
+		$this->rocket( '3.23.3.3', '3.23.3.3', 'HTTP 403' );
+		$res    = $this->clear();
+		$caches = $this->caches( $res );
+		$this->assertTrue( $res->get_data()['ok'] );
+		$this->assertSame( array( 'loopback', 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
+		$this->assertSame( array( 'wp_rocket_upgrade', 'wp_rocket', 'rocket_cdn' ), array_column( $caches, 'name' ) );
+		$this->assertSame( array( 'failed', 'cleared', 'cleared' ), array_column( $caches, 'status' ) );
+		$this->assertSame( "WP Rocket's upgrade from 3.23.3.3 to 3.23.4 is still pending after the loopback (HTTP 403).", $caches[0]['detail'] );
+	}
+
+	/** A loopback that throws is reported the same way. */
+	public function test_rocket_loopback_that_throws_is_reported(): void {
+		$this->tools();
+		SiteManager_Agent::$rocket_upgrade = array(
+			'current'  => '3.23.4',
+			'stored'   => static fn(): string => '3.23.3.3',
+			'loopback' => static function (): string {
+				throw new RuntimeException( 'cURL error 28: timed out' );
+			},
+		);
+		$caches = $this->caches( $this->clear() );
+		$this->assertSame( 'failed', $caches[0]['status'] );
+		$this->assertStringContainsString( '(cURL error 28: timed out)', $caches[0]['detail'] );
+		$this->assertSame( array( 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
+	}
+
+	/**
+	 * No upgrade pending, or no version recorded yet (a first install is not
+	 * ours to start): no loopback and no entry.
+	 *
+	 * @return array<string, array{0: string}>
+	 */
+	public static function settled_versions(): array {
+		return array(
+			'up to date'   => array( '3.23.4' ),
+			'none stored'  => array( '' ),
+		);
+	}
+
+	/** @dataProvider settled_versions */
+	public function test_no_pending_rocket_upgrade_makes_no_loopback( string $stored ): void {
+		$this->tools();
+		$this->rocket( $stored );
+		$caches = $this->caches( $this->clear() );
+		$this->assertSame( array( 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
+		$this->assertSame( array( 'wp_rocket', 'rocket_cdn' ), array_column( $caches, 'name' ) );
 	}
 
 	/** No WP Rocket and no CDN plugin: nothing to clear, and still ok. */
