@@ -26,9 +26,19 @@ final class Foundry_Toolkit_Integrity {
 	/** Seconds after which no new plugin is started (P64). */
 	public const BUDGET = 20.0;
 
-	/** How long core and plugin results are cached, in seconds (P64). */
-	public const CORE_TTL   = 6 * HOUR_IN_SECONDS;
-	public const PLUGIN_TTL = 12 * HOUR_IN_SECONDS;
+	/**
+	 * How long core and plugin results are cached, in seconds (P64): long
+	 * enough for the app's next call to carry on, short enough that a check
+	 * an hour later reads the files again (1.8.0).
+	 */
+	public const CORE_TTL   = 15 * MINUTE_IN_SECONDS;
+	public const PLUGIN_TTL = 15 * MINUTE_IN_SECONDS;
+
+	/** How long a plugin version's checksum list is kept: it never changes (1.8.0). */
+	public const SUMS_TTL = WEEK_IN_SECONDS;
+
+	/** How long "WordPress.org has none" is kept: its checksums can appear a little after a release (1.8.0). */
+	public const NO_SUMS_TTL = DAY_IN_SECONDS;
 
 	/** The option prefix for a premium plugin's or a theme's baseline (1.7.0). */
 	public const BASELINE_OPTION = 'sm_integrity_base_';
@@ -59,7 +69,8 @@ final class Foundry_Toolkit_Integrity {
 	public static $core_checksums = null;
 
 	/**
-	 * Returns a plugin's checksums, path => md5 or md5[], or null when WordPress.org has none.
+	 * Returns a plugin's checksums, path => md5 or md5[], null when
+	 * WordPress.org has none, or false when it could not be asked.
 	 *
 	 * @var callable|null
 	 */
@@ -107,7 +118,12 @@ final class Foundry_Toolkit_Integrity {
 		if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
 			set_time_limit( 60 ); // phpcs:ignore -- ignore failure of this call.
 		}
-		$response = new WP_REST_Response( self::run() );
+		$result = self::run();
+		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+			// An update began while the files were being read (1.8.0).
+			return new WP_Error( 'sm_busy', 'An update started during the check; files were changing. Check again when it has finished.', array( 'status' => 409 ) );
+		}
+		$response = new WP_REST_Response( $result );
 		$response->header( 'Cache-Control', 'no-store' );
 		$response->header( 'X-Robots-Tag', 'noindex' );
 		return $response;
@@ -159,11 +175,18 @@ final class Foundry_Toolkit_Integrity {
 				$out['complete'] = false; // The next call carries on from the cache (P64).
 				break;
 			}
-			$result           = self::cached(
+			$sums = self::sums( $slug, $plugin_version );
+			if ( false === $sums ) {
+				// WordPress.org did not answer. That is not "premium": leave
+				// the plugin for the next call and record nothing (1.8.0).
+				$out['complete'] = false;
+				continue;
+			}
+			$result           = null === $sums ? self::empty_result() : self::cached(
 				'sm_integrity_p_' . md5( $slug . '|' . $plugin_version ),
 				self::PLUGIN_TTL,
-				static function () use ( $slug, $plugin_version ) {
-					return self::check_plugin( $slug, $plugin_version );
+				static function () use ( $slug, $sums ) {
+					return self::check_plugin( $slug, $sums );
 				}
 			);
 			$out['plugins'][] = array(
@@ -278,8 +301,7 @@ final class Foundry_Toolkit_Integrity {
 		if ( ! is_dir( $dir ) ) {
 			return $out;
 		}
-		$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ) );
-		foreach ( $it as $file ) {
+		foreach ( self::walk( $dir ) as $file ) {
 			if ( ! $file instanceof SplFileInfo || ! $file->isFile() ) {
 				continue;
 			}
@@ -348,16 +370,12 @@ final class Foundry_Toolkit_Integrity {
 	/**
 	 * Compare one plugin from WordPress.org.
 	 *
-	 * @param string $slug    Plugin directory.
-	 * @param string $version Installed version.
+	 * @param string                         $slug Plugin directory.
+	 * @param array<string, string|string[]> $sums Its checksums.
 	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
 	 */
-	private static function check_plugin( $slug, $version ) {
-		$result = self::empty_result();
-		$sums   = self::plugin_checksums( $slug, $version );
-		if ( null === $sums ) {
-			return $result; // Premium, custom, or a version WordPress.org never published.
-		}
+	private static function check_plugin( $slug, array $sums ) {
+		$result            = self::empty_result();
 		$result['checked'] = true;
 		$dir               = self::plugin_root() . '/' . $slug;
 		$prefix            = 'wp-content/plugins/' . $slug . '/';
@@ -408,8 +426,7 @@ final class Foundry_Toolkit_Integrity {
 			return array();
 		}
 		$out = array();
-		$it  = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ) );
-		foreach ( $it as $file ) {
+		foreach ( self::walk( $dir ) as $file ) {
 			if ( $file instanceof SplFileInfo && $file->isFile() && 'php' === strtolower( $file->getExtension() ) ) {
 				$out[] = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
 			}
@@ -419,7 +436,53 @@ final class Foundry_Toolkit_Integrity {
 	}
 
 	/**
-	 * A result served from a transient, or made and stored.
+	 * Every entry under a directory. A directory PHP cannot open is skipped,
+	 * not a fatal error (1.8.0).
+	 *
+	 * @param string $dir Directory.
+	 * @return iterable<mixed>
+	 */
+	private static function walk( $dir ) {
+		try {
+			return new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ),
+				RecursiveIteratorIterator::LEAVES_ONLY,
+				RecursiveIteratorIterator::CATCH_GET_CHILD
+			);
+		} catch ( UnexpectedValueException $e ) {
+			return array();
+		}
+	}
+
+	/**
+	 * A plugin version's checksums: the list, kept for a week; null when
+	 * WordPress.org has none (premium, custom, or a version it never
+	 * published), kept for a day; or false when it could not be asked,
+	 * which is never kept.
+	 *
+	 * @param string $slug    Slug.
+	 * @param string $version Version.
+	 * @return array<string, string|string[]>|null|false
+	 */
+	private static function sums( $slug, $version ) {
+		$key = 'sm_integrity_sums_' . md5( $slug . '|' . $version );
+		$hit = get_transient( $key );
+		if ( is_array( $hit ) ) {
+			return $hit;
+		}
+		if ( 'none' === $hit ) {
+			return null;
+		}
+		$sums = self::plugin_checksums( $slug, $version );
+		if ( false !== $sums ) {
+			set_transient( $key, null === $sums ? 'none' : $sums, null === $sums ? self::NO_SUMS_TTL : self::SUMS_TTL );
+		}
+		return $sums;
+	}
+
+	/**
+	 * A result served from a transient, or made and stored. A result that
+	 * could not be checked is made again next time.
 	 *
 	 * @param string   $key  Transient key.
 	 * @param int      $ttl  Seconds.
@@ -432,7 +495,9 @@ final class Foundry_Toolkit_Integrity {
 			return $hit;
 		}
 		$result = call_user_func( $make );
-		set_transient( $key, $result, $ttl );
+		if ( $result['checked'] ) {
+			set_transient( $key, $result, $ttl );
+		}
 		return $result;
 	}
 
@@ -482,11 +547,12 @@ final class Foundry_Toolkit_Integrity {
 	}
 
 	/**
-	 * A plugin's checksums from WordPress.org, or null when it has none.
+	 * A plugin's checksums from WordPress.org, null when it has none (404),
+	 * or false when it could not be asked or its answer made no sense.
 	 *
 	 * @param string $slug    Slug.
 	 * @param string $version Version.
-	 * @return array<string, string|string[]>|null
+	 * @return array<string, string|string[]>|null|false
 	 */
 	private static function plugin_checksums( $slug, $version ) {
 		if ( is_callable( self::$plugin_checksums ) ) {
@@ -494,12 +560,16 @@ final class Foundry_Toolkit_Integrity {
 		}
 		$url = 'https://downloads.wordpress.org/plugin-checksums/' . rawurlencode( $slug ) . '/' . rawurlencode( $version ) . '.json';
 		$res = wp_remote_get( $url, array( 'timeout' => 10 ) );
-		if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+		if ( is_wp_error( $res ) ) {
+			return false;
+		}
+		$code = (int) wp_remote_retrieve_response_code( $res );
+		if ( 404 === $code ) {
 			return null;
 		}
-		$data = json_decode( (string) wp_remote_retrieve_body( $res ), true );
+		$data = 200 === $code ? json_decode( (string) wp_remote_retrieve_body( $res ), true ) : null;
 		if ( ! is_array( $data ) || ! isset( $data['files'] ) || ! is_array( $data['files'] ) ) {
-			return null;
+			return false;
 		}
 		$sums = array();
 		foreach ( $data['files'] as $path => $entry ) {
