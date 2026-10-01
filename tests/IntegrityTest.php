@@ -40,6 +40,15 @@ final class IntegrityTest extends UpdateSupport {
 	/** @var array<string, string> */
 	private $themes = array();
 
+	/** @var string[] Plugins whose checksum request fails, as when WordPress.org cannot be reached. */
+	private $failing = array();
+
+	/** @var bool Whether the core checksum request fails. */
+	private $core_down = false;
+
+	/** @var callable|null Runs during each plugin checksum request. */
+	private $during_fetch = null;
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->site_root = sys_get_temp_dir() . '/sm-integrity-' . uniqid() . '/';
@@ -47,6 +56,9 @@ final class IntegrityTest extends UpdateSupport {
 		$this->time      = 0.0;
 		$this->options   = array();
 		$this->themes    = array();
+		$this->failing   = array();
+		$this->core_down = false;
+		$this->during_fetch = null;
 		Functions\when( 'get_option' )->alias( fn( string $k, $d = false ) => $this->options[ $k ] ?? $d );
 		Functions\when( 'update_option' )->alias(
 			function ( string $k, $v ): bool {
@@ -82,10 +94,16 @@ final class IntegrityTest extends UpdateSupport {
 
 		Foundry_Toolkit_Integrity::$root             = $this->site_root;
 		Foundry_Toolkit_Integrity::$plugin_root      = $this->site_root . 'wp-content/plugins';
-		Foundry_Toolkit_Integrity::$core_checksums   = fn( string $v, string $l ) => 'en_US' === $l && '6.8.2' === $v ? $this->core : false;
+		Foundry_Toolkit_Integrity::$core_checksums   = fn( string $v, string $l ) => ! $this->core_down && 'en_US' === $l && '6.8.2' === $v ? $this->core : false;
 		Foundry_Toolkit_Integrity::$plugin_checksums = function ( string $slug, string $v ) {
 			$this->fetched[] = $slug;
 			$this->time     += 15.0; // Each plugin takes 15 seconds on this slow host.
+			if ( null !== $this->during_fetch ) {
+				call_user_func( $this->during_fetch );
+			}
+			if ( in_array( $slug, $this->failing, true ) ) {
+				return false;
+			}
 			return $this->plugin_sums[ $slug ] ?? null;
 		};
 		Foundry_Toolkit_Integrity::$plugins          = fn() => $this->installed;
@@ -208,10 +226,10 @@ final class IntegrityTest extends UpdateSupport {
 		$this->assertTrue( $out['truncated'] );
 	}
 
-	/** Forget the cached results, as twelve hours passing would. */
+	/** Forget the cached results, as fifteen minutes passing would; the checksum lists last a week. */
 	private function expire(): void {
 		foreach ( array_keys( $this->transients ) as $k ) {
-			if ( 0 === strpos( (string) $k, 'sm_integrity_' ) ) {
+			if ( 0 === strpos( (string) $k, 'sm_integrity_' ) && 0 !== strpos( (string) $k, 'sm_integrity_sums_' ) ) {
 				unset( $this->transients[ $k ] );
 			}
 		}
@@ -269,5 +287,95 @@ final class IntegrityTest extends UpdateSupport {
 		$this->expire();
 		$this->options = array();
 		$this->assertSame( $one, Foundry_Toolkit_Integrity::run()['others'][0]['fingerprint'] );
+	}
+
+	/**
+	 * 1.8.0: WordPress.org not answering is not "premium". The plugin is left
+	 * for the next call: no result, no baseline of whatever is on disk.
+	 */
+	public function test_a_failed_checksum_request_records_nothing(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$this->failing                    = array( 'akismet' );
+		$this->put( 'wp-content/plugins/akismet/views/shell.php', '<?php // dropped' );
+		$out = Foundry_Toolkit_Integrity::run();
+		$this->assertFalse( $out['complete'], 'the app asks again' );
+		$this->assertSame( array( 'wp-rocket' ), array_column( $out['plugins'], 'slug' ), 'akismet was not reached' );
+		$this->assertSame( array( 'wp-rocket' ), array_column( $out['others'], 'slug' ), 'akismet is not treated as premium' );
+		$this->assertCount( 1, $this->options, 'only wp-rocket has a baseline' );
+
+		$this->failing = array();
+		$again         = Foundry_Toolkit_Integrity::run();
+		$this->assertTrue( $again['complete'] );
+		$this->assertSame( array( 'wp-content/plugins/akismet/views/shell.php' ), $again['unexpected'], 'the failure was not cached' );
+	}
+
+	/** 1.8.0: a version's checksum list never changes, so it is fetched once a week, as is "WordPress.org has none". */
+	public function test_checksum_lists_outlive_the_results(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		Foundry_Toolkit_Integrity::run();
+		$this->expire();
+		$this->put( 'wp-content/plugins/akismet/akismet.php', '<?php // changed' );
+		$out = Foundry_Toolkit_Integrity::run();
+		$this->assertSame( array( 'akismet', 'wp-rocket' ), $this->fetched, 'no second request for either' );
+		$this->assertSame( array( 'wp-content/plugins/akismet/akismet.php' ), $out['modified'], 'the files were read again' );
+	}
+
+	/** 1.8.0: core checksums that could not be fetched are asked for again on the next call. */
+	public function test_unchecked_core_is_not_cached(): void {
+		$this->core_down = true;
+		$this->assertFalse( Foundry_Toolkit_Integrity::run()['core']['checked'] );
+		$this->core_down = false;
+		$this->assertTrue( Foundry_Toolkit_Integrity::run()['core']['checked'] );
+	}
+
+	/** 1.8.0: a directory PHP cannot open is skipped, not a fatal error. */
+	public function test_an_unreadable_directory_is_skipped(): void {
+		$this->put( 'wp-content/plugins/akismet/locked/a.php', '<?php' );
+		$this->put( 'wp-content/plugins/wp-rocket/locked/a.php', '<?php' );
+		$locked = array( $this->site_root . 'wp-content/plugins/akismet/locked', $this->site_root . 'wp-content/plugins/wp-rocket/locked' );
+		array_map( fn( string $d ) => chmod( $d, 0 ), $locked );
+		try {
+			$out = Foundry_Toolkit_Integrity::run();
+		} finally {
+			array_map( fn( string $d ) => chmod( $d, 0755 ), $locked );
+		}
+		$this->assertTrue( $out['ok'] );
+		$this->assertSame( array(), $out['unexpected'] );
+	}
+
+	/** 1.8.0: an update that starts while the files are being read makes the answer unusable. */
+	public function test_an_update_starting_mid_check_is_busy(): void {
+		$this->during_fetch = function (): void {
+			$this->transients['sm_update_lock'] = 'nonce';
+		};
+		$r                  = Foundry_Toolkit_Integrity::route( new WP_REST_Request( 'GET', '/sitemanager/v1/integrity', array(), '' ) );
+		$this->assertInstanceOf( WP_Error::class, $r );
+		$this->assertSame( 'sm_busy', $r->get_error_code() );
+	}
+
+	/**
+	 * 1.8.0: a list is kept a week, but "WordPress.org has none" only a day:
+	 * its checksums can appear a little after a release.
+	 */
+	public function test_no_checksums_is_asked_again_after_a_day(): void {
+		$ttl = array();
+		Functions\when( 'set_transient' )->alias(
+			function ( string $k, $v, int $t = 0 ) use ( &$ttl ): bool {
+				$this->transients[ $k ] = $v;
+				if ( 0 === strpos( $k, 'sm_integrity_sums_' ) ) {
+					$ttl[ is_array( $v ) ? 'list' : 'none' ] = $t;
+				}
+				return true;
+			}
+		);
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		Foundry_Toolkit_Integrity::run();
+		$this->assertSame(
+			array(
+				'list' => 604800,
+				'none' => 86400,
+			),
+			$ttl
+		);
 	}
 }
