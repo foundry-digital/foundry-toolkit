@@ -110,6 +110,12 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$clock            = fn() => $this->time;
 		Foundry_Toolkit_Integrity::$themes           = fn() => $this->themes;
 		Foundry_Toolkit_Integrity::$theme_root       = $this->site_root . 'wp-content/themes';
+		Foundry_Toolkit_Integrity::$content_root     = $this->site_root . 'wp-content';
+		Foundry_Toolkit_Integrity::$uploads_root     = $this->site_root . 'wp-content/uploads';
+		Foundry_Toolkit_Integrity::$dropin_names     = fn() => array( 'advanced-cache.php', 'db.php', 'object-cache.php' );
+		Foundry_Toolkit_Integrity::$ini_prepend      = fn() => '';
+		Foundry_Toolkit_Integrity::$admin_counts     = fn() => array( 1, 1 );
+		Foundry_Toolkit_Integrity::$triggers         = fn() => array();
 	}
 
 	protected function tearDown(): void {
@@ -121,6 +127,12 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$clock            = null;
 		Foundry_Toolkit_Integrity::$themes           = null;
 		Foundry_Toolkit_Integrity::$theme_root       = null;
+		Foundry_Toolkit_Integrity::$content_root     = null;
+		Foundry_Toolkit_Integrity::$uploads_root     = null;
+		Foundry_Toolkit_Integrity::$dropin_names     = null;
+		Foundry_Toolkit_Integrity::$ini_prepend      = null;
+		Foundry_Toolkit_Integrity::$admin_counts     = null;
+		Foundry_Toolkit_Integrity::$triggers         = null;
 		$this->rm( rtrim( $this->site_root, '/' ) );
 		parent::tearDown();
 	}
@@ -405,5 +417,104 @@ final class IntegrityTest extends UpdateSupport {
 			),
 			$out['unexpected']
 		);
+	}
+
+	/**
+	 * 1.9.0 (P67): the places no checksum list covers, where self-healing
+	 * malware hides its copies.
+	 */
+	public function test_places_finds_where_malware_hides(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$this->put( 'wp-config.php', '<?php // config' );
+		$this->put( 'wp-conflg.php', '<?php // a lookalike' );
+		$this->put( 'wp-content/index.php', '<?php // Silence is golden.' );
+		$this->put( 'wp-content/.cache-a1b2.php', '<?php // hidden loader' );
+		$this->put( 'wp-content/x.phtml', '<?php // shim' );
+		$this->put( 'wp-content/advanced-cache.php', '<?php // drop-in' );
+		$this->put( 'wp-content/deadbeefdeadbeef00.zip', 'PK' );
+		$this->put( 'wp-content/uploads/2024/01/photo.php', '<?php // dropped' );
+		$this->put( 'wp-content/uploads/index.php', '<?php // Silence is golden.' );
+		$this->put( 'wp-content/uploads/big/index.php', '<?php ' . str_repeat( '// padding ', 20 ) );
+		$this->put( 'wp-content/uploads/2024/01/photo.jpg', 'JPEG' );
+		$this->put( 'wp-content/uploads/0123456789abcdef.zip', 'PK' );
+		$this->put( 'wp-content/uploads/backup.zip', 'PK' );
+		$this->put( 'wp-content/mu-plugins/loader.php', '<?php // loader' );
+		$this->put( 'wp-content/mu-plugins/sub/inner.php', '<?php // inner' );
+		$this->put( 'wp-content/mu-plugins/akismet-copy.php', '<?php // akismet' );
+		$this->put( '.user.ini', "memory_limit = 256M\nauto_prepend_file = '" . $this->site_root . ".hidden.php'\n" );
+		$this->put( '.htaccess', "php_value auto_prepend_file /var/elsewhere/x.php\n" );
+		Foundry_Toolkit_Integrity::$ini_prepend  = fn() => $this->site_root . 'wordfence-waf.php';
+		Foundry_Toolkit_Integrity::$admin_counts = fn() => array( 3, 2 );
+		Foundry_Toolkit_Integrity::$triggers     = fn() => array( 'wp_users' );
+
+		$p = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertTrue( $p['complete'] );
+		$this->assertSame(
+			array(
+				'wp-conflg.php',
+				'wp-content/.cache-a1b2.php',
+				'wp-content/uploads/2024/01/photo.php',
+				'wp-content/uploads/big/index.php',
+				'wp-content/x.phtml',
+			),
+			$p['loose'],
+			'core files, wp-config.php, the drop-in and small index.php files are not loose'
+		);
+		$this->assertSame( array( 'wp-content/deadbeefdeadbeef00.zip', 'wp-content/uploads/0123456789abcdef.zip' ), $p['archives'] );
+		$this->assertSame(
+			array(
+				array(
+					'file'        => 'advanced-cache.php',
+					'fingerprint' => hash( 'sha256', '<?php // drop-in' ),
+				),
+			),
+			$p['dropins']
+		);
+		$this->assertSame( array( 'akismet-copy.php', 'loader.php', 'sub/inner.php' ), array_column( $p['mu_plugins'], 'file' ) );
+		$this->assertSame( array( 'wp-content/mu-plugins/akismet-copy.php' ), $p['copies'], 'the same file as akismet/akismet.php' );
+		$this->assertSame(
+			array(
+				array(
+					'source' => 'php',
+					'target' => 'wordfence-waf.php',
+				),
+				array(
+					'source' => '.user.ini',
+					'target' => '.hidden.php',
+				),
+				array(
+					'source' => '.htaccess',
+					'target' => 'outside',
+				),
+			),
+			$p['prepend']
+		);
+		$this->assertSame(
+			array(
+				'stored' => 3,
+				'listed' => 2,
+			),
+			$p['administrators']
+		);
+		$this->assertSame( array( 'wp_users' ), $p['triggers'] );
+		$this->assertFalse( $p['truncated'] );
+		$json = (string) json_encode( $p );
+		$this->assertStringNotContainsString( $this->site_root, $json, 'S14: no absolute path' );
+		$this->assertStringNotContainsString( 'hidden loader', $json, 'S14: no file contents' );
+	}
+
+	/** 1.9.0: a huge uploads folder stops at its own limit and says so. */
+	public function test_places_uploads_walk_stops_at_its_limit(): void {
+		for ( $i = 0; $i < 600; $i++ ) {
+			$this->put( sprintf( 'wp-content/uploads/f%03d.jpg', $i ), 'x' );
+		}
+		$t                                = 0.0;
+		Foundry_Toolkit_Integrity::$clock = function () use ( &$t ): float {
+			$t += 4.0;
+			return $t;
+		};
+		$this->installed = array();
+		$p               = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertFalse( $p['complete'] );
 	}
 }
