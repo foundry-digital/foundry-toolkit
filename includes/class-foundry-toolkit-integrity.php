@@ -306,7 +306,7 @@ final class Foundry_Toolkit_Integrity {
 				continue;
 			}
 			$ext = strtolower( $file->getExtension() );
-			if ( ! in_array( $ext, array( 'php', 'phtml', 'js' ), true ) && '.htaccess' !== $file->getFilename() ) {
+			if ( 'js' !== $ext && ! self::runs_as_php( $ext ) && '.htaccess' !== $file->getFilename() ) {
 				continue;
 			}
 			$path         = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
@@ -416,7 +416,19 @@ final class Foundry_Toolkit_Integrity {
 	}
 
 	/**
-	 * Every .php file under a directory, relative to it.
+	 * Whether a server may run a file with this extension as PHP: .php and
+	 * the older and alternative ones (.php5, .phtml, .pht, .phar), which a
+	 * dropped file uses to slip past a check for .php alone (1.9.0).
+	 *
+	 * @param string $ext Extension, any case.
+	 * @return bool
+	 */
+	private static function runs_as_php( $ext ) {
+		return 1 === preg_match( '/^(php[0-9]?|phtml|pht|phar)$/i', $ext );
+	}
+
+	/**
+	 * Every PHP file under a directory, relative to it.
 	 *
 	 * @param string $dir Directory.
 	 * @return string[]
@@ -427,7 +439,7 @@ final class Foundry_Toolkit_Integrity {
 		}
 		$out = array();
 		foreach ( self::walk( $dir ) as $file ) {
-			if ( $file instanceof SplFileInfo && $file->isFile() && 'php' === strtolower( $file->getExtension() ) ) {
+			if ( $file instanceof SplFileInfo && $file->isFile() && self::runs_as_php( $file->getExtension() ) ) {
 				$out[] = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
 			}
 		}

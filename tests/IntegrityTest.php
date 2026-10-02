@@ -378,4 +378,32 @@ final class IntegrityTest extends UpdateSupport {
 			$ttl
 		);
 	}
+
+	/**
+	 * 1.9.0: a dropped file that the server may run as PHP is unexpected
+	 * whatever its extension, not only .php.
+	 */
+	public function test_unexpected_files_of_every_php_extension(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		foreach ( array( 'a.phtml', 'b.phar', 'c.php5', 'd.PHP7', 'e.pht', 'f.txt', 'g.png' ) as $name ) {
+			$this->put( 'wp-includes/' . $name, 'x' );
+			$this->put( 'wp-content/plugins/akismet/' . $name, 'x' );
+		}
+		$out = Foundry_Toolkit_Integrity::run();
+		$this->assertSame(
+			array(
+				'wp-includes/a.phtml',
+				'wp-includes/b.phar',
+				'wp-includes/c.php5',
+				'wp-includes/d.PHP7',
+				'wp-includes/e.pht',
+				'wp-content/plugins/akismet/a.phtml',
+				'wp-content/plugins/akismet/b.phar',
+				'wp-content/plugins/akismet/c.php5',
+				'wp-content/plugins/akismet/d.PHP7',
+				'wp-content/plugins/akismet/e.pht',
+			),
+			$out['unexpected']
+		);
+	}
 }
