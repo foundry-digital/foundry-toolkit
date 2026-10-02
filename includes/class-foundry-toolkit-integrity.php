@@ -146,6 +146,14 @@ final class Foundry_Toolkit_Integrity {
 	public static $triggers = null;
 
 	/**
+	 * The key cached results and baselines are sealed with, for tests; null
+	 * means the wp-config.php keys.
+	 *
+	 * @var string|null
+	 */
+	public static $mac_key = null;
+
+	/**
 	 * Returns the time in seconds, for the budget.
 	 *
 	 * @var callable|null
@@ -295,15 +303,17 @@ final class Foundry_Toolkit_Integrity {
 				$files   = self::watched_files( $dir );
 				$result  = self::empty_result();
 				$key     = self::BASELINE_OPTION . md5( $kind . '/' . $slug );
-				$stored  = get_option( $key, null );
+				$stored  = self::unseal( get_option( $key, null ) );
 				$compare = is_array( $stored ) && isset( $stored['version'], $stored['files'] ) && $stored['version'] === $version && is_array( $stored['files'] );
 				if ( ! $compare ) {
 					update_option(
 						$key,
-						array(
-							'version' => $version,
-							'files'   => $files,
-							'at'      => gmdate( 'c' ),
+						self::seal(
+							array(
+								'version' => $version,
+								'files'   => $files,
+								'at'      => gmdate( 'c' ),
+							)
 						),
 						false
 					);
@@ -324,7 +334,7 @@ final class Foundry_Toolkit_Integrity {
 				$result['checked']     = true;
 				$result['files']       = count( $files );
 				$result['baseline']    = $compare ? 'compared' : 'recorded';
-				$result['fingerprint'] = self::fingerprint( $files );
+				$result['fingerprint'] = self::fingerprint( self::fingerprinted_set( $files ) );
 				return $result;
 			}
 		);
@@ -364,6 +374,25 @@ final class Foundry_Toolkit_Integrity {
 			$out[ $path ] = (string) md5_file( $file->getPathname() );
 		}
 		ksort( $out );
+		return $out;
+	}
+
+	/**
+	 * The files the fingerprint covers: .php, .phtml, .js and .htaccess, as
+	 * in 1.7.0, so a copy's fingerprint does not change when the site moves
+	 * to a Toolkit that watches more extensions (1.9.0).
+	 *
+	 * @param array<string, string> $files Path => MD5.
+	 * @return array<string, string>
+	 */
+	private static function fingerprinted_set( array $files ) {
+		$out = array();
+		foreach ( $files as $path => $md5 ) {
+			$ext = strtolower( pathinfo( (string) $path, PATHINFO_EXTENSION ) );
+			if ( in_array( $ext, array( 'php', 'phtml', 'js' ), true ) || '.htaccess' === basename( (string) $path ) ) {
+				$out[ $path ] = $md5;
+			}
+		}
 		return $out;
 	}
 
@@ -426,7 +455,7 @@ final class Foundry_Toolkit_Integrity {
 	 */
 	private static function core_sums( $version, $locale ) {
 		$key = 'sm_integrity_csums_' . md5( $version . '|' . $locale );
-		$hit = get_transient( $key );
+		$hit = self::unseal( get_transient( $key ) );
 		if ( is_array( $hit ) ) {
 			return $hit;
 		}
@@ -437,7 +466,7 @@ final class Foundry_Toolkit_Integrity {
 		if ( ! is_array( $sums ) ) {
 			return null;
 		}
-		set_transient( $key, $sums, self::SUMS_TTL );
+		set_transient( $key, self::seal( $sums ), self::SUMS_TTL );
 		return $sums;
 	}
 
@@ -450,12 +479,12 @@ final class Foundry_Toolkit_Integrity {
 	 */
 	private static function cached_places( $version, $locale ) {
 		$key = 'sm_integrity_places';
-		$hit = get_transient( $key );
+		$hit = self::unseal( get_transient( $key ) );
 		if ( is_array( $hit ) && isset( $hit['loose'] ) ) {
 			return $hit;
 		}
 		$places = self::places( $version, $locale );
-		set_transient( $key, $places, self::CORE_TTL );
+		set_transient( $key, self::seal( $places ), self::CORE_TTL );
 		return $places;
 	}
 
@@ -478,10 +507,12 @@ final class Foundry_Toolkit_Integrity {
 
 		// The WordPress root: PHP that core does not ship, other than wp-config.php.
 		$sums = self::core_sums( $version, $locale );
-		if ( is_array( $sums ) ) {
+		if ( ! is_array( $sums ) ) {
+			$complete = false; // The root cannot be judged without them.
+		} else {
 			foreach ( self::files_in( $root ) as $name ) {
 				if ( self::runs_as_php( pathinfo( $name, PATHINFO_EXTENSION ) ) && 'wp-config.php' !== $name && ! isset( $sums[ $name ] ) ) {
-					$loose[] = $name;
+					$loose[] = $root . $name;
 				}
 			}
 		}
@@ -490,8 +521,8 @@ final class Foundry_Toolkit_Integrity {
 			$file = $content . '/' . $name;
 			if ( self::is_hex_archive( $name ) ) {
 				$archives[] = self::relative( $file );
-			} elseif ( self::runs_as_php( pathinfo( $name, PATHINFO_EXTENSION ) ) && 'index.php' !== $name && ! in_array( $name, $dropins, true ) ) {
-				$loose[] = self::relative( $file );
+			} elseif ( self::runs_as_php( pathinfo( $name, PATHINFO_EXTENSION ) ) && ! ( 'index.php' === $name && self::is_stub( $file ) ) && ! in_array( $name, $dropins, true ) ) {
+				$loose[] = $file;
 			}
 		}
 		// Uploads: no PHP at all, within its own time limit.
@@ -510,8 +541,8 @@ final class Foundry_Toolkit_Integrity {
 				$name = $f->getFilename();
 				if ( self::is_hex_archive( $name ) ) {
 					$archives[] = self::relative( $f->getPathname() );
-				} elseif ( self::runs_as_php( $f->getExtension() ) && ! ( 'index.php' === $name && $f->getSize() <= 100 ) ) {
-					$loose[] = self::relative( $f->getPathname() );
+				} elseif ( self::runs_as_php( $f->getExtension() ) && ! ( 'index.php' === $name && self::is_stub( $f->getPathname() ) ) ) {
+					$loose[] = $f->getPathname();
 				}
 			}
 		}
@@ -564,7 +595,7 @@ final class Foundry_Toolkit_Integrity {
 		}
 		return array(
 			'complete'       => $complete,
-			'loose'          => self::listed( $loose ),
+			'loose'          => self::fingerprinted( $loose ),
 			'archives'       => self::listed( $archives ),
 			'dropins'        => $dropin_list,
 			'mu_plugins'     => array_slice( $mu_list, 0, self::MAX_PLACES ),
@@ -577,6 +608,93 @@ final class Foundry_Toolkit_Integrity {
 			'triggers'       => array_slice( $triggers, 0, self::MAX_PLACES ),
 			'truncated'      => $cut,
 		);
+	}
+
+	/**
+	 * Files as {file, fingerprint}, by path relative to the WordPress root,
+	 * sorted and capped; the fingerprint is the file's SHA-256, so a file
+	 * marked as expected is raised again if it changes.
+	 *
+	 * @param string[] $files Absolute paths.
+	 * @return array<int, array{file: string, fingerprint: string}>
+	 */
+	private static function fingerprinted( array $files ) {
+		$out = array();
+		foreach ( $files as $file ) {
+			$rel = self::relative( $file );
+			if ( null !== $rel ) {
+				$out[ $rel ] = (string) hash_file( 'sha256', $file );
+			}
+		}
+		ksort( $out );
+		$rows = array();
+		foreach ( array_slice( $out, 0, self::MAX_PLACES, true ) as $rel => $fingerprint ) {
+			$rows[] = array(
+				'file'        => (string) $rel,
+				'fingerprint' => $fingerprint,
+			);
+		}
+		return $rows;
+	}
+
+	/**
+	 * Whether an index.php is an empty stub: nothing but PHP tags, comments
+	 * and white space ("Silence is golden"). A small file with code is not.
+	 *
+	 * @param string $file Path.
+	 * @return bool
+	 */
+	private static function is_stub( $file ) {
+		$size = filesize( $file );
+		if ( false === $size || $size > 200 ) {
+			return false;
+		}
+		$text = preg_replace( '~/\*.*?\*/|//[^\n]*|#[^\n]*~s', '', (string) file_get_contents( $file ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- a small local file, read and never returned (S14).
+		return '' === trim( str_replace( array( '<?php', '?>' ), '', (string) $text ) );
+	}
+
+	/**
+	 * Seal a value for the database with a key from wp-config.php, so one
+	 * written straight into the database is not trusted (1.9.0).
+	 *
+	 * @param mixed $value Value.
+	 * @return array{v: mixed, m: string}
+	 */
+	private static function seal( $value ) {
+		return array(
+			'v' => $value,
+			'm' => hash_hmac( 'sha256', serialize( $value ), self::mac_key() ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- a stable byte form to sign, never unserialized.
+		);
+	}
+
+	/**
+	 * A sealed value, or null when it is missing or its seal does not verify.
+	 *
+	 * @param mixed $stored What the database held.
+	 * @return mixed
+	 */
+	private static function unseal( $stored ) {
+		if ( ! is_array( $stored ) || ! array_key_exists( 'v', $stored ) || ! isset( $stored['m'] ) || ! is_string( $stored['m'] ) ) {
+			return null;
+		}
+		$mac = hash_hmac( 'sha256', serialize( $stored['v'] ), self::mac_key() ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- as in seal().
+		return hash_equals( $mac, $stored['m'] ) ? $stored['v'] : null;
+	}
+
+	/**
+	 * The sealing key: AUTH_KEY and SECURE_AUTH_KEY from wp-config.php, or
+	 * WordPress's own auth salt where they are not set.
+	 *
+	 * @return string
+	 */
+	private static function mac_key() {
+		if ( null !== self::$mac_key ) {
+			return self::$mac_key;
+		}
+		if ( defined( 'AUTH_KEY' ) && defined( 'SECURE_AUTH_KEY' ) && 'put your unique phrase here' !== AUTH_KEY ) {
+			return 'sm-integrity|' . AUTH_KEY . SECURE_AUTH_KEY;
+		}
+		return 'sm-integrity|' . wp_salt( 'auth' );
 	}
 
 	/**
@@ -626,7 +744,8 @@ final class Foundry_Toolkit_Integrity {
 
 	/**
 	 * The file a prepend setting names, relative to the WordPress root,
-	 * "outside" when it is outside it, "" when it names none.
+	 * "outside:" and its file name when it is outside it, "" when it names
+	 * none.
 	 *
 	 * @param string $value The setting.
 	 * @param string $base  The directory a relative value is under.
@@ -639,7 +758,7 @@ final class Foundry_Toolkit_Integrity {
 		}
 		$path = 0 === strpos( $value, '/' ) || 1 === preg_match( '#^[A-Za-z]:[\\\\/]#', $value ) ? $value : $base . $value;
 		$rel  = self::relative( $path );
-		return null === $rel || false !== strpos( $rel, '..' ) ? 'outside' : $rel;
+		return null === $rel || false !== strpos( $rel, '..' ) ? 'outside:' . basename( str_replace( '\\', '/', $path ) ) : $rel;
 	}
 
 	/**
@@ -649,9 +768,14 @@ final class Foundry_Toolkit_Integrity {
 	 * @return string|null
 	 */
 	private static function relative( $path ) {
-		$path = str_replace( '\\', '/', $path );
-		$root = str_replace( '\\', '/', self::root() );
-		return 0 === strpos( $path, $root ) ? (string) substr( $path, strlen( $root ) ) : null;
+		$path    = str_replace( '\\', '/', $path );
+		$root    = str_replace( '\\', '/', self::root() );
+		$content = str_replace( '\\', '/', self::content_root() ) . '/';
+		if ( 0 === strpos( $path, $root ) ) {
+			return (string) substr( $path, strlen( $root ) );
+		}
+		// wp-content kept outside the WordPress root still reads as wp-content/.
+		return 0 === strpos( $path, $content ) ? 'wp-content/' . substr( $path, strlen( $content ) ) : null;
 	}
 
 	/**
@@ -873,7 +997,7 @@ final class Foundry_Toolkit_Integrity {
 	 */
 	private static function sums( $slug, $version ) {
 		$key = 'sm_integrity_sums_' . md5( $slug . '|' . $version );
-		$hit = get_transient( $key );
+		$hit = self::unseal( get_transient( $key ) );
 		if ( is_array( $hit ) ) {
 			return $hit;
 		}
@@ -882,7 +1006,7 @@ final class Foundry_Toolkit_Integrity {
 		}
 		$sums = self::plugin_checksums( $slug, $version );
 		if ( false !== $sums ) {
-			set_transient( $key, null === $sums ? 'none' : $sums, null === $sums ? self::NO_SUMS_TTL : self::SUMS_TTL );
+			set_transient( $key, self::seal( null === $sums ? 'none' : $sums ), null === $sums ? self::NO_SUMS_TTL : self::SUMS_TTL );
 		}
 		return $sums;
 	}
@@ -897,13 +1021,13 @@ final class Foundry_Toolkit_Integrity {
 	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
 	 */
 	private static function cached( $key, $ttl, $make ) {
-		$hit = get_transient( $key );
+		$hit = self::unseal( get_transient( $key ) );
 		if ( is_array( $hit ) && isset( $hit['checked'], $hit['files'], $hit['modified'], $hit['missing'], $hit['unexpected'] ) ) {
 			return $hit;
 		}
 		$result = call_user_func( $make );
 		if ( $result['checked'] ) {
-			set_transient( $key, $result, $ttl );
+			set_transient( $key, self::seal( $result ), $ttl );
 		}
 		return $result;
 	}

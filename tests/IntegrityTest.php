@@ -51,13 +51,13 @@ final class IntegrityTest extends UpdateSupport {
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->site_root = sys_get_temp_dir() . '/sm-integrity-' . uniqid() . '/';
-		$this->fetched   = array();
-		$this->time      = 0.0;
-		$this->options   = array();
-		$this->themes    = array();
-		$this->failing   = array();
-		$this->core_down = false;
+		$this->site_root    = sys_get_temp_dir() . '/sm-integrity-' . uniqid() . '/';
+		$this->fetched      = array();
+		$this->time         = 0.0;
+		$this->options      = array();
+		$this->themes       = array();
+		$this->failing      = array();
+		$this->core_down    = false;
 		$this->during_fetch = null;
 		Functions\when( 'get_option' )->alias( fn( string $k, $d = false ) => $this->options[ $k ] ?? $d );
 		Functions\when( 'update_option' )->alias(
@@ -116,6 +116,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$ini_prepend      = fn() => '';
 		Foundry_Toolkit_Integrity::$admin_counts     = fn() => array( 1, 1 );
 		Foundry_Toolkit_Integrity::$triggers         = fn() => array();
+		Foundry_Toolkit_Integrity::$mac_key          = 'test-key';
 	}
 
 	protected function tearDown(): void {
@@ -133,6 +134,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$ini_prepend      = null;
 		Foundry_Toolkit_Integrity::$admin_counts     = null;
 		Foundry_Toolkit_Integrity::$triggers         = null;
+		Foundry_Toolkit_Integrity::$mac_key          = null;
 		$this->rm( rtrim( $this->site_root, '/' ) );
 		parent::tearDown();
 	}
@@ -375,7 +377,7 @@ final class IntegrityTest extends UpdateSupport {
 			function ( string $k, $v, int $t = 0 ) use ( &$ttl ): bool {
 				$this->transients[ $k ] = $v;
 				if ( 0 === strpos( $k, 'sm_integrity_sums_' ) ) {
-					$ttl[ is_array( $v ) ? 'list' : 'none' ] = $t;
+					$ttl[ is_array( $v['v'] ) ? 'list' : 'none' ] = $t;
 				}
 				return true;
 			}
@@ -427,13 +429,14 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
 		$this->put( 'wp-config.php', '<?php // config' );
 		$this->put( 'wp-conflg.php', '<?php // a lookalike' );
-		$this->put( 'wp-content/index.php', '<?php // Silence is golden.' );
+		$this->put( 'wp-content/index.php', "<?php\n// Silence is golden.\n" );
 		$this->put( 'wp-content/.cache-a1b2.php', '<?php // hidden loader' );
 		$this->put( 'wp-content/x.phtml', '<?php // shim' );
 		$this->put( 'wp-content/advanced-cache.php', '<?php // drop-in' );
 		$this->put( 'wp-content/deadbeefdeadbeef00.zip', 'PK' );
 		$this->put( 'wp-content/uploads/2024/01/photo.php', '<?php // dropped' );
 		$this->put( 'wp-content/uploads/index.php', '<?php // Silence is golden.' );
+		$this->put( 'wp-content/uploads/2024/index.php', '<?php eval($_POST[1]);' );
 		$this->put( 'wp-content/uploads/big/index.php', '<?php ' . str_repeat( '// padding ', 20 ) );
 		$this->put( 'wp-content/uploads/2024/01/photo.jpg', 'JPEG' );
 		$this->put( 'wp-content/uploads/0123456789abcdef.zip', 'PK' );
@@ -454,12 +457,14 @@ final class IntegrityTest extends UpdateSupport {
 				'wp-conflg.php',
 				'wp-content/.cache-a1b2.php',
 				'wp-content/uploads/2024/01/photo.php',
+				'wp-content/uploads/2024/index.php',
 				'wp-content/uploads/big/index.php',
 				'wp-content/x.phtml',
 			),
-			$p['loose'],
-			'core files, wp-config.php, the drop-in and small index.php files are not loose'
+			array_column( $p['loose'], 'file' ),
+			'core files, wp-config.php, the drop-in and empty index.php stubs are not loose; a small index.php with code is'
 		);
+		$this->assertSame( hash( 'sha256', '<?php // a lookalike' ), $p['loose'][0]['fingerprint'] );
 		$this->assertSame( array( 'wp-content/deadbeefdeadbeef00.zip', 'wp-content/uploads/0123456789abcdef.zip' ), $p['archives'] );
 		$this->assertSame(
 			array(
@@ -484,7 +489,7 @@ final class IntegrityTest extends UpdateSupport {
 				),
 				array(
 					'source' => '.htaccess',
-					'target' => 'outside',
+					'target' => 'outside:x.php',
 				),
 			),
 			$p['prepend']
@@ -513,8 +518,77 @@ final class IntegrityTest extends UpdateSupport {
 			$t += 4.0;
 			return $t;
 		};
-		$this->installed = array();
-		$p               = Foundry_Toolkit_Integrity::run()['places'];
+		$this->installed                  = array();
+		$p                                = Foundry_Toolkit_Integrity::run()['places'];
 		$this->assertFalse( $p['complete'] );
+	}
+
+	/** 1.9.0: without core checksums the root cannot be judged, so places says it is incomplete. */
+	public function test_places_without_core_checksums_is_incomplete(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$this->core_down                  = true;
+		$this->assertFalse( Foundry_Toolkit_Integrity::run()['places']['complete'] );
+	}
+
+	/**
+	 * 1.9.0: cached results and baselines are sealed with a key from
+	 * wp-config.php, so one written straight into the database is ignored.
+	 */
+	public function test_forged_cache_and_baseline_are_ignored(): void {
+		Foundry_Toolkit_Integrity::$clock                             = fn() => 0.0;
+		$this->put( 'wp-content/plugins/akismet/akismet.php', '<?php // changed' );
+		$this->transients[ 'sm_integrity_p_' . md5( 'akismet|5.3' ) ] = array(
+			'checked'    => true,
+			'files'      => 2,
+			'modified'   => array(),
+			'missing'    => array(),
+			'unexpected' => array(),
+		);
+		$this->put( 'wp-content/plugins/wp-rocket/x.php', '<?php // dropped' );
+		$this->options[ Foundry_Toolkit_Integrity::BASELINE_OPTION . md5( 'plugin/wp-rocket' ) ] = array(
+			'version' => '3.18.1',
+			'files'   => array(
+				'wp-rocket.php' => md5( '<?php // premium' ),
+				'x.php'         => md5( '<?php // dropped' ),
+			),
+		);
+		$out = Foundry_Toolkit_Integrity::run();
+		$this->assertContains( 'wp-content/plugins/akismet/akismet.php', $out['modified'], 'the forged clean result was ignored' );
+		$this->assertSame( 'recorded', $out['others'][0]['baseline'], 'the forged baseline was replaced, so the app compares fingerprints' );
+	}
+
+	/** 1.9.0: a wp-content folder outside the WordPress root is still reported, as wp-content/. */
+	public function test_content_outside_the_root_is_reported(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$elsewhere                        = sys_get_temp_dir() . '/sm-content-' . uniqid();
+		mkdir( $elsewhere . '/uploads', 0777, true );
+		file_put_contents( $elsewhere . '/shim.php', '<?php // shim' );
+		Foundry_Toolkit_Integrity::$content_root = $elsewhere;
+		Foundry_Toolkit_Integrity::$uploads_root = $elsewhere . '/uploads';
+		try {
+			$p = Foundry_Toolkit_Integrity::run()['places'];
+		} finally {
+			$this->rm( $elsewhere );
+		}
+		$this->assertSame( array( 'wp-content/shim.php' ), array_column( $p['loose'], 'file' ) );
+	}
+
+	/**
+	 * 1.9.0: the fingerprint covers the files it covered in 1.7.0 (.php,
+	 * .phtml, .js, .htaccess), so a plugin that ships a .phar keeps its
+	 * fingerprint across the upgrade, while the site's own baseline watches
+	 * every extension a server runs as PHP.
+	 */
+	public function test_fingerprint_keeps_its_file_set(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$before                           = Foundry_Toolkit_Integrity::run()['others'][0]['fingerprint'];
+		$this->expire();
+		$this->options = array();
+		$this->put( 'wp-content/plugins/wp-rocket/lib/tool.phar', 'phar' );
+		$after = Foundry_Toolkit_Integrity::run();
+		$this->assertSame( $before, $after['others'][0]['fingerprint'] );
+		$this->expire();
+		$this->put( 'wp-content/plugins/wp-rocket/lib/shell.php5', '<?php // dropped' );
+		$this->assertSame( array( 'wp-content/plugins/wp-rocket/lib/shell.php5' ), Foundry_Toolkit_Integrity::run()['unexpected'] );
 	}
 }
