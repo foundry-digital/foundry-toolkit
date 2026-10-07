@@ -96,6 +96,23 @@ final class CacheClearTest extends UpdateSupport {
 		$this->assertSame( array( 'cleared', 'cleared', 'cleared', 'cleared' ), array_column( $caches, 'status' ) );
 	}
 
+	/**
+	 * 1.11.0: a persistent object cache is flushed after Elementor has
+	 * dropped its records and before WP Rocket builds pages from them.
+	 */
+	public function test_object_cache_is_flushed_between_elementor_and_wp_rocket(): void {
+		$this->tools();
+		$tools                          = SiteManager_Agent::$cache_tools;
+		$tools['object_cache']          = function () {
+			$this->calls[] = 'object_cache';
+			return true;
+		};
+		SiteManager_Agent::$cache_tools = $tools;
+		$caches                         = $this->caches( $this->update_plugin( 'elementor/elementor.php', '3.30.3' ) );
+		$this->assertSame( array( 'mute', 'elementor_files', 'elementor_library', 'object_cache', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
+		$this->assertSame( array( 'elementor_files', 'elementor_library', 'object_cache', 'wp_rocket', 'rocket_cdn' ), array_column( $caches, 'name' ) );
+	}
+
 	/** James, 2026-09-24: Elementor Pro clears Elementor's caches too. */
 	public function test_elementor_pro_update_clears_elementor(): void {
 		$this->plugins['elementor-pro/elementor-pro.php'] = array(

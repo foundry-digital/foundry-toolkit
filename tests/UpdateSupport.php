@@ -82,6 +82,7 @@ abstract class UpdateSupport extends TestCase {
 			return $this->upgrader;
 		};
 
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false ); // no persistent object cache unless a test says so
 		Functions\when( 'get_transient' )->alias( fn( string $k ) => $this->transients[ $k ] ?? false );
 		Functions\when( 'set_transient' )->alias(
 			function ( string $k, $v ): bool {
