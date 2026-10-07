@@ -1665,8 +1665,9 @@ final class SiteManager_Agent {
 
 	/**
 	 * Clear the caches a plugin update leaves stale (P39b): Elementor's files
-	 * and library when Elementor or Elementor Pro was updated, then WP Rocket, then
-	 * the Rocket.net CDN last so it refills from fresh pages. Only tools
+	 * and library when Elementor or Elementor Pro was updated, then a persistent
+	 * object cache (1.11.0), then WP Rocket, then the Rocket.net CDN last so it
+	 * refills from fresh pages. Only tools
 	 * that are installed are listed. A failed clear is reported, never
 	 * fatal: the update itself worked. /caches (P63) calls it with no items.
 	 *
@@ -1680,6 +1681,10 @@ final class SiteManager_Agent {
 			$steps[] = 'elementor_files';
 			$steps[] = 'elementor_library';
 		}
+		// After Elementor has dropped its records and before WP Rocket builds
+		// pages from them: a stale copy of the options in a persistent object
+		// cache made Elementor believe its CSS files still existed (1.11.0).
+		$steps[] = 'object_cache';
 		$steps[] = 'wp_rocket';
 		$mute    = isset( $tools['rocket_cdn'], $tools['mute_cdn'] ) ? $tools['mute_cdn'] : null;
 		$out     = array();
@@ -1748,6 +1753,7 @@ final class SiteManager_Agent {
 		$tools = array(
 			'elementor_files'   => null,
 			'elementor_library' => null,
+			'object_cache'      => null,
 			'wp_rocket'         => null,
 			'rocket_cdn'        => null,
 			'mute_cdn'          => null,
@@ -1811,6 +1817,11 @@ final class SiteManager_Agent {
 			};
 		}
 		$kinsta = self::kinsta_purge();
+		if ( null === $kinsta && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+			// A persistent object cache, such as Object Cache Pro's Redis on
+			// Rocket.net. On Kinsta its own step below clears the object cache.
+			$tools['object_cache'] = array( __CLASS__, 'flush_object_cache' );
+		}
 		if ( null !== $kinsta ) {
 			// Kinsta's MU plugin: its object cache, then its page cache, then
 			// its CDN, each checked the way `wp kinsta cache purge` checks them.
@@ -1836,6 +1847,24 @@ final class SiteManager_Agent {
 			};
 		}
 		return $tools;
+	}
+
+	/**
+	 * Flush the persistent object cache (P39b, 1.11.0). The update lock and
+	 * this request's used nonce are transients, which live in that cache, so
+	 * both are put back: the lock still holds for the steps that follow, and
+	 * the request still cannot be replayed (P18, P38).
+	 *
+	 * @return true|string True, or why it failed.
+	 */
+	public static function flush_object_cache() {
+		$lock    = get_transient( self::LOCK_TRANSIENT );
+		$flushed = wp_cache_flush();
+		if ( is_string( $lock ) && '' !== $lock ) {
+			set_transient( self::LOCK_TRANSIENT, $lock, self::LOCK_TTL );
+			set_transient( self::NONCE_PREFIX . $lock, 1, self::NONCE_TTL );
+		}
+		return false !== $flushed ? true : 'The object cache did not confirm the flush.';
 	}
 
 	/**
