@@ -23,6 +23,9 @@ final class Foundry_Toolkit_Integrity {
 	/** The most paths any one list returns (P65). */
 	public const MAX_PATHS = 200;
 
+	/** The most files one item's list returns (P68). */
+	public const MAX_ITEM_FILES = 5000;
+
 	/** Seconds after which no new plugin is started (P64). */
 	public const BUDGET = 20.0;
 
@@ -183,6 +186,74 @@ final class Foundry_Toolkit_Integrity {
 		$response->header( 'Cache-Control', 'no-store' );
 		$response->header( 'X-Robots-Tag', 'noindex' );
 		return $response;
+	}
+
+	/**
+	 * GET /integrity/files/{kind}/{slug} (P68, 1.10.0): the MD5 of every
+	 * watched file in one installed plugin or theme, so the app can name
+	 * the files that differ between two sites' copies. The item is read
+	 * from the route, which the signature covers.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public static function files_route( $request ) {
+		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+			return new WP_Error( 'sm_busy', 'An update is running; files are changing. Ask again when it has finished.', array( 'status' => 409 ) );
+		}
+		$result = null;
+		if ( 1 === preg_match( '#/integrity/files/(plugin|theme)/([A-Za-z0-9._-]+)$#', (string) $request->get_route(), $m ) ) {
+			$result = self::item_files( $m[1], $m[2] );
+		}
+		if ( null === $result ) {
+			return new WP_Error( 'sm_not_installed', 'No such plugin or theme is installed.', array( 'status' => 404 ) );
+		}
+		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+			return new WP_Error( 'sm_busy', 'An update started while the files were being read. Ask again when it has finished.', array( 'status' => 409 ) );
+		}
+		$response = new WP_REST_Response( $result );
+		$response->header( 'Cache-Control', 'no-store' );
+		$response->header( 'X-Robots-Tag', 'noindex' );
+		return $response;
+	}
+
+	/**
+	 * One installed plugin's or theme's watched files, path relative to its
+	 * own directory => MD5 (S14: no contents, no absolute path), or null
+	 * when nothing by that name is installed. Only a name WordPress itself
+	 * lists is read, so the request cannot point at another directory.
+	 *
+	 * @param string $kind plugin or theme.
+	 * @param string $slug Directory name.
+	 * @return array<string, mixed>|null
+	 */
+	public static function item_files( $kind, $slug ) {
+		$version = null;
+		if ( 'plugin' === $kind ) {
+			foreach ( self::installed_plugins() as $file => $plugin_version ) {
+				if ( '.' !== dirname( $file ) && dirname( $file ) === $slug ) {
+					$version = $plugin_version;
+					break;
+				}
+			}
+			$dir = self::plugin_root() . '/' . $slug;
+		} else {
+			$themes  = self::installed_themes();
+			$version = isset( $themes[ $slug ] ) ? $themes[ $slug ] : null;
+			$dir     = self::theme_root() . '/' . $slug;
+		}
+		if ( null === $version ) {
+			return null;
+		}
+		$files = self::watched_files( $dir );
+		return array(
+			'ok'        => true,
+			'kind'      => $kind,
+			'slug'      => $slug,
+			'version'   => (string) $version,
+			'files'     => (object) array_slice( $files, 0, self::MAX_ITEM_FILES, true ),
+			'truncated' => count( $files ) > self::MAX_ITEM_FILES,
+		);
 	}
 
 	/**
