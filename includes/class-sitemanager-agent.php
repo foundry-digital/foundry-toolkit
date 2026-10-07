@@ -205,6 +205,17 @@ final class SiteManager_Agent {
 				'permission_callback' => array( __CLASS__, 'permission' ),
 			)
 		);
+		// P68: one item's file list, read only. The item is in the route so
+		// the signature covers it.
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/integrity/files/(?P<kind>plugin|theme)/(?P<slug>[A-Za-z0-9._-]+)',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( 'Foundry_Toolkit_Integrity', 'files_route' ),
+				'permission_callback' => array( __CLASS__, 'permission' ),
+			)
+		);
 		if ( ! self::updates_enabled() ) {
 			return; // P32, S2: without the opt-in the POST routes do not exist.
 		}

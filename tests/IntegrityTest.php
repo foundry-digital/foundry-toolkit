@@ -214,6 +214,51 @@ final class IntegrityTest extends UpdateSupport {
 		$this->assertSame( 'sm_busy', $busy->get_error_code() );
 	}
 
+	public function test_item_files_lists_one_installed_item(): void {
+		$this->put( 'wp-content/plugins/wp-rocket/inc/Engine.php', '<?php // engine' );
+		$this->put( 'wp-content/plugins/wp-rocket/assets/app.js', 'js' );
+		$this->put( 'wp-content/plugins/wp-rocket/assets/app.css', 'never watched' );
+		$this->put( 'wp-content/themes/hello/functions.php', '<?php // theme' );
+		$this->themes = array( 'hello' => '3.5.1' );
+
+		$r = Foundry_Toolkit_Integrity::files_route( new WP_REST_Request( 'GET', '/sitemanager/v1/integrity/files/plugin/wp-rocket', array(), '' ) );
+		$this->assertInstanceOf( WP_REST_Response::class, $r );
+		$this->assertSame( 'no-store', $r->headers['Cache-Control'] ?? '' );
+		$data = $r->get_data();
+		$this->assertSame( array( 'plugin', 'wp-rocket', '3.18.1', false ), array( $data['kind'], $data['slug'], $data['version'], $data['truncated'] ) );
+		$this->assertSame(
+			array(
+				'assets/app.js'  => md5( 'js' ),
+				'inc/Engine.php' => md5( '<?php // engine' ),
+				'wp-rocket.php'  => md5( '<?php // premium' ),
+			),
+			(array) $data['files'],
+			'paths relative to the plugin, watched extensions only'
+		);
+		$json = (string) json_encode( $data );
+		$this->assertStringNotContainsString( $this->site_root, $json, 'S14: no absolute path' );
+		$this->assertStringNotContainsString( 'engine', $json, 'S14: no file contents' );
+
+		$theme = Foundry_Toolkit_Integrity::item_files( 'theme', 'hello' );
+		$this->assertNotNull( $theme );
+		$this->assertSame( array( 'functions.php' => md5( '<?php // theme' ) ), (array) $theme['files'] );
+		$this->assertSame( '3.5.1', $theme['version'] );
+	}
+
+	public function test_item_files_reads_only_what_is_installed(): void {
+		$this->put( 'wp-content/plugins/removed/removed.php', '<?php // on disk, not installed' );
+		foreach ( array( 'plugin/removed', 'plugin/..', 'plugin/.', 'plugin/hello.php', 'theme/akismet', 'core/akismet', 'plugin/akismet/../wp-rocket' ) as $item ) {
+			$r = Foundry_Toolkit_Integrity::files_route( new WP_REST_Request( 'GET', '/sitemanager/v1/integrity/files/' . $item, array(), '' ) );
+			$this->assertInstanceOf( WP_Error::class, $r, $item );
+			$this->assertSame( 'sm_not_installed', $r->get_error_code(), $item );
+		}
+
+		$this->transients['sm_update_lock'] = 'nonce';
+		$busy                               = Foundry_Toolkit_Integrity::files_route( new WP_REST_Request( 'GET', '/sitemanager/v1/integrity/files/plugin/akismet', array(), '' ) );
+		$this->assertInstanceOf( WP_Error::class, $busy );
+		$this->assertSame( 'sm_busy', $busy->get_error_code() );
+	}
+
 	public function test_budget_stops_and_the_cache_carries_on(): void {
 		// Each fetch takes 15 seconds; no new plugin starts after 20.
 		$first = Foundry_Toolkit_Integrity::run();
