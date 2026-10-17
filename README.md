@@ -31,14 +31,13 @@ Define any of these in `wp-config.php` to opt a site out. All default to on exce
 | `FDHARDEN_DISABLE_APP_PASSWORDS` | true | An integration signs in with an application password. |
 | `FDHARDEN_LOCK_REGISTRATION` | true | Visitors register through `wp-login.php`. WooCommerce and Gravity Forms are unaffected either way. |
 | `FDHARDEN_REQUIRE_2FA` | false | On to make every administrator set up an authenticator app before they can use the site (below). |
-| `FDHARDEN_2FA_EXEMPT` | `''` | A comma-separated list of logins the 2FA requirement skips, such as a host's support account. |
 
 ## Required 2FA for administrators
 
 With `define( 'FDHARDEN_REQUIRE_2FA', true );` and the WordPress.org [Two Factor](https://wordpress.org/plugins/two-factor/) plugin (0.17.0 or later) active, an administrator without an authenticator app is sent to a setup wizard as soon as they log in, and every other page sends them back to it until they finish: scan the QR code, enter a code, save the backup codes (ADR 0035 in the Site Manager repository). It is like a building that issues every key holder a swipe card at the front desk before they reach the lifts: the card system is the Two Factor plugin's, the Toolkit only stands at the desk.
 
 - Only the plugin's authenticator app (TOTP) counts. Email codes do not.
-- Editors, customers and members are never touched. Nor are WP-CLI and cron.
+- Every administrator, with no exemptions, a host's support account included. Editors, customers and members are never touched. Nor are WP-CLI and cron.
 - While someone is held, only the wizard, logging out, the plugin's own REST routes (`two-factor/1.0`) and the Heartbeat get through. Any other REST request is refused with a 403.
 - With the constant set but the plugin inactive, nobody is held, and the Site Manager report says so (`users.two_factor_plugin_missing`).
 

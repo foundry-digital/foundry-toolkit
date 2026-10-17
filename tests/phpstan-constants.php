@@ -16,5 +16,4 @@ define( 'FDHARDEN_DISABLE_FEEDS', true );
 define( 'FDHARDEN_DISABLE_APP_PASSWORDS', true );
 define( 'FDHARDEN_LOCK_REGISTRATION', true );
 define( 'FDHARDEN_REQUIRE_2FA', false );
-define( 'FDHARDEN_2FA_EXEMPT', '' );
 define( 'FOUNDRY_TOOLKIT_PRERELEASES', false );

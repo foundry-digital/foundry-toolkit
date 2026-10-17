@@ -112,9 +112,9 @@ final class Foundry_Toolkit_Two_Factor {
 
 	/**
 	 * Whether a user must finish the wizard before anything else: an
-	 * administrator (or super admin), not named in FDHARDEN_2FA_EXEMPT,
-	 * without the plugin's TOTP enabled and a key saved. Email codes alone
-	 * do not count.
+	 * administrator (or super admin) without the plugin's TOTP enabled and a
+	 * key saved. Email codes alone do not count. No administrator is exempt,
+	 * a host's support account included (James, 2026-10-17).
 	 *
 	 * @param WP_User $user The user.
 	 * @return bool
@@ -124,7 +124,7 @@ final class Foundry_Toolkit_Two_Factor {
 			return false;
 		}
 		$admin = in_array( 'administrator', (array) $user->roles, true ) || ( is_multisite() && is_super_admin( $user->ID ) );
-		if ( ! $admin || in_array( strtolower( $user->user_login ), self::exempt(), true ) ) {
+		if ( ! $admin ) {
 			return false;
 		}
 		$supported = Two_Factor_Core::get_supported_providers_for_user( $user );
@@ -134,19 +134,6 @@ final class Foundry_Toolkit_Two_Factor {
 		}
 		$enabled = Two_Factor_Core::get_enabled_providers_for_user( $user );
 		return ! ( in_array( self::TOTP, $enabled, true ) && $supported[ self::TOTP ]->is_available_for_user( $user ) );
-	}
-
-	/**
-	 * Lower-case logins from FDHARDEN_2FA_EXEMPT, such as a host's support
-	 * account.
-	 *
-	 * @return string[]
-	 */
-	private static function exempt() {
-		if ( ! defined( 'FDHARDEN_2FA_EXEMPT' ) || ! is_string( FDHARDEN_2FA_EXEMPT ) ) {
-			return array();
-		}
-		return array_values( array_filter( array_map( 'strtolower', array_map( 'trim', explode( ',', FDHARDEN_2FA_EXEMPT ) ) ) ) );
 	}
 
 	/**

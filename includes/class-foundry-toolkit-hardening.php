@@ -148,9 +148,6 @@ final class Foundry_Toolkit_Hardening {
 			// at the setup wizard (ADR 0035). Needs the Two Factor plugin:
 			// without it nobody is held.
 			'FDHARDEN_REQUIRE_2FA'           => false,
-			// Comma-separated logins the 2FA requirement skips, such as a
-			// host's support account.
-			'FDHARDEN_2FA_EXEMPT'            => '',
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {

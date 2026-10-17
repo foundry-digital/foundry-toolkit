@@ -22,7 +22,6 @@ parameters:
         - FDHARDEN_DISABLE_APP_PASSWORDS
         - FDHARDEN_LOCK_REGISTRATION
         - FDHARDEN_REQUIRE_2FA
-        - FDHARDEN_2FA_EXEMPT
         # Defined by whichever copy loads first: ours or an old must-use agent.
         - SITEMANAGER_AGENT_VERSION
         - FOUNDRY_TOOLKIT_PRERELEASES

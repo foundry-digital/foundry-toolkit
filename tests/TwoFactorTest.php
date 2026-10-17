@@ -102,7 +102,6 @@ final class TwoFactorTest extends TestCase {
 	 */
 	private function enable( bool $plugin = true ): void {
 		define( 'FDHARDEN_REQUIRE_2FA', true );
-		define( 'FDHARDEN_2FA_EXEMPT', 'wpengine, Support' );
 		if ( $plugin ) {
 			require_once __DIR__ . '/TwoFactorFakes.php';
 			Two_Factor_Core::$enabled = array(
@@ -126,8 +125,7 @@ final class TwoFactorTest extends TestCase {
 			'administrator with TOTP'              => array( new WP_User( 2, 'sam', 'sam@example.test', array( 'administrator' ) ), false ),
 			'editor'                               => array( new WP_User( 3, 'ed', 'ed@example.test', array( 'editor' ) ), false ),
 			'subscriber'                           => array( new WP_User( 4, 'sub', 'sub@example.test', array( 'subscriber' ) ), false ),
-			'exempt login'                         => array( new WP_User( 5, 'wpengine', 'wpe@example.test', array( 'administrator' ) ), false ),
-			'exempt login in another case'         => array( new WP_User( 9, 'support', 'help@example.test', array( 'administrator' ) ), false ),
+			'host support login, no exemptions'    => array( new WP_User( 5, 'wpengine', 'wpe@example.test', array( 'administrator' ) ), true ),
 			'administrator with email codes alone' => array( new WP_User( 6, 'mo', 'mo@example.test', array( 'administrator' ) ), true ),
 			'TOTP enabled but no key saved'        => array( new WP_User( 8, 'lee', 'lee@example.test', array( 'administrator' ) ), true ),
 			'key saved but only email enabled'     => array( new WP_User( 10, 'pat', 'pat@example.test', array( 'administrator' ) ), true ),
@@ -299,7 +297,7 @@ final class TwoFactorTest extends TestCase {
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();
 		$this->assertFalse( FDHARDEN_REQUIRE_2FA );
-		$this->assertSame( '', FDHARDEN_2FA_EXEMPT );
+		$this->assertFalse( defined( 'FDHARDEN_2FA_EXEMPT' ), 'no administrator is ever exempt' );
 		$this->assertFalse( has_action( 'admin_init' ) );
 		$this->assertFalse( has_filter( 'login_redirect' ) );
 		$this->assertSame(
