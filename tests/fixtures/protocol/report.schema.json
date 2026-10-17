@@ -128,7 +128,9 @@
         "administrators": { "type": "integer", "minimum": 0 },
         "administrators_with_2fa": { "type": "integer", "minimum": 0 },
         "two_factor_source": { "enum": ["wordfence", "two-factor", "none"] },
-        "has_admin_username": { "type": "boolean" }
+        "has_admin_username": { "type": "boolean" },
+        "two_factor_required": { "type": "boolean", "description": "Foundry Toolkit 1.13.0: FDHARDEN_REQUIRE_2FA is set and the Two Factor plugin is active, so administrators without an authenticator app are held at the setup wizard (ADR 0035)." },
+        "two_factor_plugin_missing": { "type": "boolean", "description": "Foundry Toolkit 1.13.0: FDHARDEN_REQUIRE_2FA is set but the Two Factor plugin is not active, so nothing is enforced." }
       }
     },
     "constants": {

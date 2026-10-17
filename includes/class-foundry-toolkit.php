@@ -76,6 +76,8 @@ final class Foundry_Toolkit {
 			require_once __DIR__ . '/class-foundry-toolkit-hardening.php';
 			Foundry_Toolkit_Hardening::boot();
 			self::$hardening = true;
+			require_once __DIR__ . '/class-foundry-toolkit-two-factor.php';
+			Foundry_Toolkit_Two_Factor::boot();
 		}
 
 		Foundry_Toolkit_Updater::boot();

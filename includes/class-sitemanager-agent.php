@@ -614,11 +614,17 @@ final class SiteManager_Agent {
 		}
 		$admin_user = get_user_by( 'login', 'admin' );
 		$has_admin  = $admin_user instanceof WP_User && in_array( 'administrator', (array) $admin_user->roles, true );
+		$required   = class_exists( 'Foundry_Toolkit_Two_Factor', false ) ? Foundry_Toolkit_Two_Factor::report_fields() : array(
+			'two_factor_required'       => false,
+			'two_factor_plugin_missing' => false,
+		);
 		return array(
-			'administrators'          => $admins,
-			'administrators_with_2fa' => $with_2fa,
-			'two_factor_source'       => $source,
-			'has_admin_username'      => $has_admin,
+			'administrators'            => $admins,
+			'administrators_with_2fa'   => $with_2fa,
+			'two_factor_source'         => $source,
+			'has_admin_username'        => $has_admin,
+			'two_factor_required'       => $required['two_factor_required'],
+			'two_factor_plugin_missing' => $required['two_factor_plugin_missing'],
 		);
 	}
 
