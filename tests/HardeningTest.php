@@ -45,6 +45,9 @@ final class HardeningTest extends TestCase {
 			}
 		);
 		Functions\when( '__' )->returnArg( 1 );
+		if ( 'test_default_role_guard_is_on_with_the_registration_lock_off' === $this->getName( false ) ) {
+			define( 'FDHARDEN_LOCK_REGISTRATION', false ); // Before define_toggles(), as wp-config.php would.
+		}
 		Foundry_Toolkit_Hardening::define_toggles();
 	}
 
@@ -194,5 +197,55 @@ final class HardeningTest extends TestCase {
 		Foundry_Toolkit_Hardening::$login_error_codes = array();
 		Foundry_Toolkit_Hardening::capture_login_errors( new WP_Error( 'account_suspended', 'Your account is suspended.' ) );
 		$this->assertSame( 'Your account is suspended.', Foundry_Toolkit_Hardening::generic_login_error( 'Your account is suspended.' ) );
+	}
+
+	/** @return array<string, array{0: mixed, 1: mixed}> */
+	public function default_roles(): array {
+		return array(
+			'administrator'                   => array( 'administrator', 'subscriber' ),
+			'editor'                          => array( 'editor', 'subscriber' ),
+			'shop manager'                    => array( 'shop_manager', 'subscriber' ),
+			'custom role with manage_options' => array( 'site_boss', 'subscriber' ),
+			'subscriber'                      => array( 'subscriber', 'subscriber' ),
+			'author'                          => array( 'author', 'author' ),
+			'shop customer'                   => array( 'customer', 'customer' ),
+			'AMA gallery'                     => array( 'gallery', 'gallery' ),
+			'AMA exhibitor'                   => array( 'exhibitor', 'exhibitor' ),
+			'a role that does not exist'      => array( 'nonsense', 'nonsense' ),
+		);
+	}
+
+	/**
+	 * Ticket 071: with the registration lock off, so visitors can register,
+	 * the default role can still never be one that is held.
+	 *
+	 * @dataProvider default_roles
+	 * @param mixed $stored What the option holds.
+	 * @param mixed $read   What WordPress gets back.
+	 */
+	public function test_default_role_is_never_a_held_role( $stored, $read ): void {
+		$caps = sm_test_role_caps();
+		Functions\when( 'get_role' )->alias(
+			static function ( string $role ) use ( $caps ) {
+				return isset( $caps[ $role ] ) ? new WP_Role( $role, $caps[ $role ] ) : null;
+			}
+		);
+		$this->assertSame( $read, Foundry_Toolkit_Hardening::safe_default_role( $stored ) );
+	}
+
+	public function test_default_role_guard_is_on_with_the_registration_lock_off(): void {
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'remove_action' )->justReturn( true );
+		Functions\when( 'plugin_basename' )->justReturn( 'foundry-toolkit/foundry-toolkit.php' );
+		$filters = array();
+		Functions\when( 'add_filter' )->alias(
+			static function ( string $hook, $callback ) use ( &$filters ): bool {
+				$filters[ $hook ][] = $callback;
+				return true;
+			}
+		);
+		Foundry_Toolkit_Hardening::boot();
+		$this->assertContains( array( 'Foundry_Toolkit_Hardening', 'safe_default_role' ), $filters['option_default_role'] ?? array() );
+		$this->assertArrayNotHasKey( 'pre_option_default_role', $filters );
 	}
 }

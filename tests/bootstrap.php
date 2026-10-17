@@ -190,6 +190,74 @@ class WP_User {
 	}
 }
 
+/** Minimal WP_Role. */
+class WP_Role {
+	/** @var string */
+	public $name;
+	/** @var array<string, bool> */
+	public $capabilities;
+
+	/**
+	 * @param string              $name         Role slug.
+	 * @param array<string, bool> $capabilities Capabilities.
+	 */
+	public function __construct( string $name, array $capabilities ) {
+		$this->name         = $name;
+		$this->capabilities = $capabilities;
+	}
+
+	/**
+	 * @param string $cap Capability.
+	 */
+	public function has_cap( string $cap ): bool {
+		return ! empty( $this->capabilities[ $cap ] );
+	}
+}
+
+/**
+ * Capabilities by role for the tests, as WordPress, WooCommerce and AMA
+ * Portals define them. The portal roles are built on subscriber's.
+ *
+ * @return array<string, array<string, bool>>
+ */
+function sm_test_role_caps(): array {
+	$subscriber = array( 'read' => true );
+	$author     = $subscriber + array(
+		'edit_posts'    => true,
+		'publish_posts' => true,
+		'upload_files'  => true,
+	);
+	$editor     = $author + array(
+		'edit_others_posts' => true,
+		'edit_pages'        => true,
+		'unfiltered_html'   => true,
+	);
+	return array(
+		'administrator' => $editor + array(
+			'manage_options'   => true,
+			'promote_users'    => true,
+			'edit_users'       => true,
+			'create_users'     => true,
+			'delete_users'     => true,
+			'activate_plugins' => true,
+		),
+		'editor'        => $editor,
+		'shop_manager'  => $editor + array(
+			'list_users'         => true,
+			'manage_woocommerce' => true,
+		),
+		'author'        => $author,
+		'subscriber'    => $subscriber,
+		'customer'      => $subscriber,
+		'exhibitor'     => $subscriber,
+		'gallery'       => $subscriber,
+		'vip'           => $subscriber,
+		'partner'       => $subscriber,
+		'art-pass'      => $subscriber,
+		'site_boss'     => $subscriber + array( 'manage_options' => true ),
+	);
+}
+
 /** Minimal wpdb: answers the handful of queries the agent runs from a canned map. */
 class wpdb {
  // phpcs:ignore PEAR.NamingConventions.ValidClassName.StartWithCapital
@@ -350,6 +418,7 @@ class SM_Test_Upgrader {
 
 require __DIR__ . '/../includes/class-foundry-toolkit.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-loader.php';
+require __DIR__ . '/../includes/class-foundry-toolkit-privilege.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-updater.php';
 require __DIR__ . '/../includes/class-sitemanager-agent.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-hardening.php';

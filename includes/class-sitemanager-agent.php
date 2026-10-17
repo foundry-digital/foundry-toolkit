@@ -574,7 +574,8 @@ final class SiteManager_Agent {
 	}
 
 	/**
-	 * Counts and booleans about administrators. Never a name or an email (S6).
+	 * Counts and booleans about administrators and privileged accounts. Never
+	 * a name or an email (S6).
 	 *
 	 * @return array<string, mixed>
 	 */
@@ -618,6 +619,10 @@ final class SiteManager_Agent {
 			'two_factor_required'       => false,
 			'two_factor_plugin_missing' => false,
 		);
+		// By capability, so a role other than Administrator given these
+		// powers counts; the fingerprint shows one account swapped for
+		// another without naming either (ticket 071, S6).
+		$privileged = Foundry_Toolkit_Privilege::privileged_user_ids();
 		return array(
 			'administrators'            => $admins,
 			'administrators_with_2fa'   => $with_2fa,
@@ -625,6 +630,8 @@ final class SiteManager_Agent {
 			'has_admin_username'        => $has_admin,
 			'two_factor_required'       => $required['two_factor_required'],
 			'two_factor_plugin_missing' => $required['two_factor_plugin_missing'],
+			'privileged_users'          => count( $privileged ),
+			'privileged_users_hash'     => hash( 'sha256', implode( ',', $privileged ) ),
 		);
 	}
 

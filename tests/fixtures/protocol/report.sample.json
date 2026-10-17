@@ -103,7 +103,9 @@
     "two_factor_source": "wordfence",
     "has_admin_username": false,
     "two_factor_required": true,
-    "two_factor_plugin_missing": false
+    "two_factor_plugin_missing": false,
+    "privileged_users": 3,
+    "privileged_users_hash": "8e2e5906844adcae6ce8cea8ad8abacc85d08e77b04a2c847f4387350b375a80"
   },
   "constants": {
     "DISALLOW_FILE_EDIT": true,
