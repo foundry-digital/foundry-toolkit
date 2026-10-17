@@ -112,6 +112,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$theme_root       = $this->site_root . 'wp-content/themes';
 		Foundry_Toolkit_Integrity::$content_root     = $this->site_root . 'wp-content';
 		Foundry_Toolkit_Integrity::$uploads_root     = $this->site_root . 'wp-content/uploads';
+		Foundry_Toolkit_Integrity::$recent_folders   = fn() => array();
 		Foundry_Toolkit_Integrity::$dropin_names     = fn() => array( 'advanced-cache.php', 'db.php', 'object-cache.php' );
 		Foundry_Toolkit_Integrity::$ini_prepend      = fn() => '';
 		Foundry_Toolkit_Integrity::$admin_counts     = fn() => array( 1, 1 );
@@ -130,6 +131,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$theme_root       = null;
 		Foundry_Toolkit_Integrity::$content_root     = null;
 		Foundry_Toolkit_Integrity::$uploads_root     = null;
+		Foundry_Toolkit_Integrity::$recent_folders   = null;
 		Foundry_Toolkit_Integrity::$dropin_names     = null;
 		Foundry_Toolkit_Integrity::$ini_prepend      = null;
 		Foundry_Toolkit_Integrity::$admin_counts     = null;
@@ -606,6 +608,78 @@ final class IntegrityTest extends UpdateSupport {
 		$this->installed                  = array();
 		$p                                = Foundry_Toolkit_Integrity::run()['places'];
 		$this->assertFalse( $p['complete'] );
+	}
+
+	/**
+	 * A clock that moves 4 seconds every time it is read, so one uploads
+	 * walk reaches about 384 entries before its 10 second limit.
+	 */
+	private function slow_clock(): void {
+		$t                                = 0.0;
+		Foundry_Toolkit_Integrity::$clock = function () use ( &$t ): float {
+			$t += 4.0;
+			return $t;
+		};
+		$this->installed                  = array();
+	}
+
+	/**
+	 * 1.14.0: a walk that stops at its limit carries on from there in the
+	 * next call, without the places cache holding it back, until a whole
+	 * pass has finished (Sydney Contemporary, 10 GB of uploads).
+	 */
+	public function test_uploads_walk_resumes_across_calls(): void {
+		for ( $i = 0; $i < 900; $i++ ) {
+			$this->put( sprintf( 'wp-content/uploads/2019/03/f%03d.jpg', $i ), 'x' );
+		}
+		$this->put( 'wp-content/uploads/2019/04/shell.php', '<?php // dropped' );
+		$this->slow_clock();
+		$calls = 0;
+		do {
+			$p = Foundry_Toolkit_Integrity::run()['places'];
+			++$calls;
+			if ( ! $p['complete'] ) {
+				$this->assertSame( array(), $p['loose'], 'not reached yet' );
+			}
+		} while ( ! $p['complete'] && $calls < 10 );
+		$this->assertTrue( $p['complete'] );
+		$this->assertGreaterThan( 1, $calls, 'the walk took more than one call' );
+		$this->assertSame( array( 'wp-content/uploads/2019/04/shell.php' ), array_column( $p['loose'], 'file' ) );
+	}
+
+	/**
+	 * 1.14.0: once a pass has finished, places stays complete. A file the
+	 * walk has not come back to yet keeps its place from the last pass, and
+	 * one that has since been removed drops out at once.
+	 */
+	public function test_uploads_walk_keeps_the_last_pass(): void {
+		for ( $i = 0; $i < 900; $i++ ) {
+			$this->put( sprintf( 'wp-content/uploads/2019/03/f%03d.jpg', $i ), 'x' );
+		}
+		$this->put( 'wp-content/uploads/2019/04/shell.php', '<?php // dropped' );
+		$this->put( 'wp-content/uploads/2019/05/other.php', '<?php // dropped too' );
+		$this->slow_clock();
+		for ( $calls = 0; $calls < 10 && ! Foundry_Toolkit_Integrity::run()['places']['complete']; $calls++ ) {
+			continue;
+		}
+		unlink( $this->site_root . 'wp-content/uploads/2019/04/shell.php' );
+		$this->expire();
+		$p = Foundry_Toolkit_Integrity::run()['places']; // A new pass, stopped in 2019/03 again.
+		$this->assertTrue( $p['complete'], 'still judged from the last pass' );
+		$this->assertSame( array( 'wp-content/uploads/2019/05/other.php' ), array_column( $p['loose'], 'file' ) );
+	}
+
+	/** 1.14.0: the current and previous month are walked in full on every call, before the rest. */
+	public function test_recent_months_walked_every_call(): void {
+		for ( $i = 0; $i < 900; $i++ ) {
+			$this->put( sprintf( 'wp-content/uploads/2000/01/f%03d.jpg', $i ), 'x' );
+		}
+		$this->put( 'wp-content/uploads/2026/10/cache.php', '<?php // dropped today' );
+		Foundry_Toolkit_Integrity::$recent_folders = fn() => array( '2026/10', '2026/09' );
+		$this->slow_clock();
+		$p = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertFalse( $p['complete'], 'the first pass has not finished' );
+		$this->assertSame( array( 'wp-content/uploads/2026/10/cache.php' ), array_column( $p['loose'], 'file' ) );
 	}
 
 	/** 1.9.0: without core checksums the root cannot be judged, so places says it is incomplete. */

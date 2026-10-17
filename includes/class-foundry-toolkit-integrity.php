@@ -60,6 +60,12 @@ final class Foundry_Toolkit_Integrity {
 	/** Seconds the walk of the uploads folder may take (P67). */
 	public const UPLOADS_BUDGET = 10.0;
 
+	/**
+	 * The option holding where the uploads walk stopped and what the last
+	 * whole pass found (P67, 1.14.0), sealed like the caches.
+	 */
+	public const UPLOADS_WALK_OPTION = 'sm_integrity_uploads_walk';
+
 	/** Core files never checked: hardening often removes them, and none runs. */
 	private const CORE_IGNORED = array( 'readme.html', 'license.txt', 'wp-config-sample.php' );
 
@@ -127,6 +133,14 @@ final class Foundry_Toolkit_Integrity {
 	 * @var string|null
 	 */
 	public static $uploads_root = null;
+
+	/**
+	 * Returns the uploads folders walked in full on every call, relative to
+	 * the uploads folder; null means this month's and last month's.
+	 *
+	 * @var callable|null
+	 */
+	public static $recent_folders = null;
 
 	/**
 	 * Returns the drop-in file names; null means _get_dropins().
@@ -563,7 +577,11 @@ final class Foundry_Toolkit_Integrity {
 			return $hit;
 		}
 		$places = self::places( $version, $locale );
-		set_transient( $key, self::seal( $places ), self::CORE_TTL );
+		if ( $places['complete'] ) {
+			// An unfinished walk is not kept, so the app's next round
+			// carries it on (1.14.0).
+			set_transient( $key, self::seal( $places ), self::CORE_TTL );
+		}
 		return $places;
 	}
 
@@ -604,26 +622,12 @@ final class Foundry_Toolkit_Integrity {
 				$loose[] = $file;
 			}
 		}
-		// Uploads: no PHP at all, within its own time limit.
-		if ( '' !== $uploads && is_dir( $uploads ) ) {
-			$started = self::now();
-			$seen    = 0;
-			foreach ( self::walk( $uploads ) as $f ) {
-				++$seen;
-				if ( 0 === $seen % 128 && self::now() - $started > self::UPLOADS_BUDGET ) {
-					$complete = false;
-					break;
-				}
-				if ( ! $f instanceof SplFileInfo || ! $f->isFile() ) {
-					continue;
-				}
-				$name = $f->getFilename();
-				if ( self::is_hex_archive( $name ) ) {
-					$archives[] = self::relative( $f->getPathname() );
-				} elseif ( self::runs_as_php( $f->getExtension() ) && ! ( 'index.php' === $name && self::is_stub( $f->getPathname() ) ) ) {
-					$loose[] = $f->getPathname();
-				}
-			}
+		// Uploads: no PHP at all, walked a little each call (1.14.0).
+		$walk     = self::walk_uploads( $uploads );
+		$loose    = array_merge( $loose, $walk['loose'] );
+		$archives = array_merge( $archives, $walk['archives'] );
+		if ( ! $walk['complete'] ) {
+			$complete = false;
 		}
 
 		$dropin_list = array();
@@ -687,6 +691,229 @@ final class Foundry_Toolkit_Integrity {
 			'triggers'       => array_slice( $triggers, 0, self::MAX_PLACES ),
 			'truncated'      => $cut,
 		);
+	}
+
+	/**
+	 * The uploads folder's loose PHP files and hex-named archives (P67,
+	 * 1.14.0). This month's and last month's folders are walked in full
+	 * every call. The rest is walked in path order from where the last call
+	 * stopped, for at most UPLOADS_BUDGET seconds, so a folder too big for
+	 * one call is covered over several. Until a whole pass has finished the
+	 * answer is incomplete; after that, what the walk has not come back to
+	 * yet is taken from the last whole pass, each file checked to still be
+	 * there.
+	 *
+	 * @param string $uploads The uploads folder, or "".
+	 * @return array{loose: string[], archives: string[], complete: bool}
+	 */
+	private static function walk_uploads( $uploads ) {
+		$out = array(
+			'loose'    => array(),
+			'archives' => array(),
+			'complete' => true,
+		);
+		if ( '' === $uploads || ! is_dir( $uploads ) ) {
+			return $out;
+		}
+		$root  = md5( $uploads );
+		$state = self::unseal( get_option( self::UPLOADS_WALK_OPTION, null ) );
+		if ( ! is_array( $state ) || ! isset( $state['root'] ) || $root !== $state['root'] ) {
+			$state = array(
+				'root'   => $root,
+				'cursor' => array(),
+				'found'  => array(),
+				'last'   => null,
+			);
+		}
+		$recent = array();
+		foreach ( self::recent_folders() as $folder ) {
+			$folder = trim( (string) $folder, '/' );
+			if ( '' !== $folder && is_dir( $uploads . '/' . $folder ) ) {
+				$recent[] = $folder;
+			}
+		}
+
+		$report = array();
+		foreach ( $recent as $folder ) {
+			foreach ( self::sorted_walk( $uploads . '/' . $folder, $folder . '/', array() ) as $rel => $path ) {
+				$kind = self::uploads_kind( $path );
+				if ( null !== $kind ) {
+					$report[ $rel ] = $kind;
+				}
+			}
+		}
+
+		$found    = (array) $state['found'];
+		$started  = self::now();
+		$seen     = 0;
+		$reached  = null;
+		$finished = true;
+		foreach ( self::sorted_walk( $uploads, '', (array) $state['cursor'], $recent ) as $rel => $path ) {
+			++$seen;
+			if ( 0 === $seen % 128 && self::now() - $started > self::UPLOADS_BUDGET ) {
+				$finished = false;
+				break;
+			}
+			$reached = (string) $rel;
+			$kind    = self::uploads_kind( $path );
+			if ( null !== $kind ) {
+				$found[ $rel ] = $kind;
+			}
+		}
+		if ( $finished ) {
+			$state = array(
+				'root'   => $root,
+				'cursor' => array(),
+				'found'  => array(),
+				'last'   => $found,
+			);
+		} else {
+			$state['found'] = $found;
+			if ( null !== $reached ) {
+				$state['cursor'] = explode( '/', $reached );
+			}
+		}
+		update_option( self::UPLOADS_WALK_OPTION, self::seal( $state ), false );
+
+		$report += $found;
+		if ( ! $finished && is_array( $state['last'] ) ) {
+			foreach ( $state['last'] as $rel => $kind ) {
+				if ( ! isset( $report[ $rel ] ) && self::after( explode( '/', (string) $rel ), (array) $state['cursor'] ) && ! self::under( (string) $rel, $recent ) ) {
+					$report[ $rel ] = $kind;
+				}
+			}
+		}
+		foreach ( $report as $rel => $kind ) {
+			$path = $uploads . '/' . $rel;
+			if ( ! is_file( $path ) ) {
+				continue; // Removed since it was found.
+			}
+			$relative = self::relative( $path );
+			if ( 'archive' === $kind && null !== $relative ) {
+				$out['archives'][] = $relative;
+			} elseif ( 'archive' !== $kind ) {
+				$out['loose'][] = $path;
+			}
+		}
+		$out['complete'] = $finished || is_array( $state['last'] );
+		return $out;
+	}
+
+	/**
+	 * What an uploads file is: "loose" (PHP other than an empty index.php
+	 * stub), "archive" (a hex-named ZIP), or null.
+	 *
+	 * @param string $path Absolute path.
+	 * @return string|null
+	 */
+	private static function uploads_kind( $path ) {
+		$name = basename( $path );
+		if ( self::is_hex_archive( $name ) ) {
+			return 'archive';
+		}
+		if ( self::runs_as_php( pathinfo( $name, PATHINFO_EXTENSION ) ) && ! ( 'index.php' === $name && self::is_stub( $path ) ) ) {
+			return 'loose';
+		}
+		return null;
+	}
+
+	/**
+	 * The files under a directory in path order (each name compared byte by
+	 * byte), relative path => absolute path, starting after the path whose
+	 * parts are $after and leaving out the folders in $skip and any
+	 * symbolic link to a directory.
+	 *
+	 * @param string   $dir    Directory.
+	 * @param string   $prefix Its path relative to the walk's root, with a trailing slash, or "".
+	 * @param string[] $after  The parts of the last path already walked, or none.
+	 * @param string[] $skip   Folders, relative to the walk's root, to leave out.
+	 * @return Generator<string, string>
+	 */
+	private static function sorted_walk( $dir, $prefix, array $after, array $skip = array() ) {
+		$names = is_readable( $dir ) ? scandir( $dir, SCANDIR_SORT_NONE ) : false;
+		if ( false === $names ) {
+			return;
+		}
+		sort( $names, SORT_STRING );
+		foreach ( $names as $name ) {
+			$name = (string) $name;
+			if ( '.' === $name || '..' === $name ) {
+				continue;
+			}
+			$sub = array();
+			if ( array() !== $after ) {
+				$cmp = strcmp( $name, (string) $after[0] );
+				if ( $cmp < 0 ) {
+					continue;
+				}
+				if ( 0 === $cmp ) {
+					$sub = array_slice( $after, 1 );
+				}
+				$after = array();
+				if ( 0 === $cmp && array() === $sub ) {
+					continue; // The last path walked.
+				}
+			}
+			$path = $dir . '/' . $name;
+			$rel  = $prefix . $name;
+			if ( is_dir( $path ) ) {
+				if ( ! is_link( $path ) && ! in_array( $rel, $skip, true ) ) {
+					yield from self::sorted_walk( $path, $rel . '/', $sub, $skip );
+				}
+			} elseif ( is_file( $path ) ) {
+				yield $rel => $path;
+			}
+		}
+	}
+
+	/**
+	 * Whether a path comes after another in the walk's order.
+	 *
+	 * @param string[] $path   Its parts.
+	 * @param string[] $cursor The other's parts; none means the start.
+	 * @return bool
+	 */
+	private static function after( array $path, array $cursor ) {
+		foreach ( $cursor as $i => $part ) {
+			if ( ! isset( $path[ $i ] ) ) {
+				return false;
+			}
+			$cmp = strcmp( (string) $path[ $i ], (string) $part );
+			if ( 0 !== $cmp ) {
+				return $cmp > 0;
+			}
+		}
+		return count( $path ) > count( $cursor );
+	}
+
+	/**
+	 * Whether a path sits under one of these folders.
+	 *
+	 * @param string   $rel     Path.
+	 * @param string[] $folders Folders.
+	 * @return bool
+	 */
+	private static function under( $rel, array $folders ) {
+		foreach ( $folders as $folder ) {
+			if ( 0 === strpos( $rel, $folder . '/' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The uploads folders walked in full every call: this month's and last
+	 * month's, where WordPress files new uploads.
+	 *
+	 * @return string[]
+	 */
+	private static function recent_folders() {
+		if ( is_callable( self::$recent_folders ) ) {
+			return array_map( 'strval', (array) call_user_func( self::$recent_folders ) );
+		}
+		$now = time();
+		return array( gmdate( 'Y/m', $now ), gmdate( 'Y/m', (int) strtotime( 'first day of last month', $now ) ) );
 	}
 
 	/**
