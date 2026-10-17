@@ -109,10 +109,12 @@ final class TwoFactorTest extends TestCase {
 				6 => array( 'Two_Factor_Email' ),
 				8 => array( 'Two_Factor_Totp' ),
 				10 => array( 'Two_Factor_Email' ),
+				11 => array( 'Two_Factor_Totp' ),
 			);
 			Two_Factor_Totp::$keys    = array(
 				2  => Two_Factor_Totp::KEY,
 				10 => Two_Factor_Totp::KEY,
+				11 => Two_Factor_Totp::KEY,
 			);
 		}
 		Foundry_Toolkit_Two_Factor::boot();
@@ -123,7 +125,9 @@ final class TwoFactorTest extends TestCase {
 		return array(
 			'administrator without TOTP'           => array( new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) ), true ),
 			'administrator with TOTP'              => array( new WP_User( 2, 'sam', 'sam@example.test', array( 'administrator' ) ), false ),
-			'editor'                               => array( new WP_User( 3, 'ed', 'ed@example.test', array( 'editor' ) ), false ),
+			'editor without TOTP'                  => array( new WP_User( 3, 'ed', 'ed@example.test', array( 'editor' ) ), true ),
+			'editor with TOTP'                     => array( new WP_User( 11, 'eve', 'eve@example.test', array( 'editor' ) ), false ),
+			'shop manager'                         => array( new WP_User( 12, 'shop', 'shop@example.test', array( 'shop_manager' ) ), false ),
 			'subscriber'                           => array( new WP_User( 4, 'sub', 'sub@example.test', array( 'subscriber' ) ), false ),
 			'host support login, no exemptions'    => array( new WP_User( 5, 'wpengine', 'wpe@example.test', array( 'administrator' ) ), true ),
 			'administrator with email codes alone' => array( new WP_User( 6, 'mo', 'mo@example.test', array( 'administrator' ) ), true ),
@@ -292,12 +296,28 @@ final class TwoFactorTest extends TestCase {
 		$this->assertFalse( Foundry_Toolkit_Two_Factor::is_held( new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) ) ) );
 	}
 
-	public function test_off_by_default(): void {
+	public function test_on_by_default_but_holds_nobody_until_the_plugin_is_active(): void {
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();
-		$this->assertFalse( FDHARDEN_REQUIRE_2FA );
+		$this->assertTrue( FDHARDEN_REQUIRE_2FA );
 		$this->assertFalse( defined( 'FDHARDEN_2FA_EXEMPT' ), 'no administrator is ever exempt' );
+		$this->assertNotFalse( has_action( 'admin_init', array( Foundry_Toolkit_Two_Factor::class, 'admin_init' ) ) );
+		$this->assertFalse( Foundry_Toolkit_Two_Factor::is_held( new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) ) ) );
+		$this->assertSame(
+			array(
+				'two_factor_required'       => false,
+				'two_factor_plugin_missing' => true,
+			),
+			Foundry_Toolkit_Two_Factor::report_fields()
+		);
+	}
+
+	public function test_switched_off_in_wp_config(): void {
+		define( 'FDHARDEN_REQUIRE_2FA', false );
+		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Foundry_Toolkit_Hardening::define_toggles();
+		Foundry_Toolkit_Two_Factor::boot();
 		$this->assertFalse( has_action( 'admin_init' ) );
 		$this->assertFalse( has_filter( 'login_redirect' ) );
 		$this->assertSame(

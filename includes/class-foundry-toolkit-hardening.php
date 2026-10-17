@@ -144,10 +144,11 @@ final class Foundry_Toolkit_Hardening {
 			// WooCommerce and Gravity Forms create accounts themselves and
 			// are unaffected either way.
 			'FDHARDEN_LOCK_REGISTRATION'     => true,
-			// On to hold every administrator without an authenticator app
-			// at the setup wizard (ADR 0035). Needs the Two Factor plugin:
-			// without it nobody is held.
-			'FDHARDEN_REQUIRE_2FA'           => false,
+			// Holds every administrator and editor without an
+			// authenticator app at the setup wizard (ADR 0035). Needs the
+			// Two Factor plugin: without it nobody is held. Off only in an
+			// emergency, such as every administrator locked out.
+			'FDHARDEN_REQUIRE_2FA'           => true,
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {
