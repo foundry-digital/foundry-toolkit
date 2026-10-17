@@ -54,6 +54,11 @@ final class HardeningTest extends TestCase {
 		parent::tearDown();
 	}
 
+	public function test_the_plugin_lock_is_off_until_a_site_opts_in(): void {
+		$this->assertFalse( FDHARDEN_LOCK_PLUGINS );
+		$this->assertSame( '', FDHARDEN_LOCK_EXEMPT );
+	}
+
 	public function test_products_keep_reviews_while_woocommerce_reviews_are_on(): void {
 		$this->assertSame( array( 'product' ), Foundry_Toolkit_Hardening::kept_comment_post_types() );
 		$this->options['woocommerce_enable_reviews'] = 'no';

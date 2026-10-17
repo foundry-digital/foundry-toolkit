@@ -107,6 +107,10 @@ final class Foundry_Toolkit_Hardening {
 			add_filter( 'pre_option_users_can_register', '__return_zero' );
 			add_filter( 'pre_option_default_role', array( __CLASS__, 'subscriber' ) );
 		}
+		if ( FDHARDEN_LOCK_PLUGINS ) {
+			require_once __DIR__ . '/class-foundry-toolkit-plugin-lock.php';
+			Foundry_Toolkit_Plugin_Lock::boot();
+		}
 		self::$booted = true;
 	}
 
@@ -144,6 +148,12 @@ final class Foundry_Toolkit_Hardening {
 			// WooCommerce and Gravity Forms create accounts themselves and
 			// are unaffected either way.
 			'FDHARDEN_LOCK_REGISTRATION'     => true,
+			// On to stop anyone but the logins in FDHARDEN_LOCK_EXEMPT
+			// adding, uploading, deleting or editing plugins and themes.
+			// Updates keep working (1.12.0).
+			'FDHARDEN_LOCK_PLUGINS'          => false,
+			// Foundry's own logins, comma separated, for the lock above.
+			'FDHARDEN_LOCK_EXEMPT'           => '',
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {

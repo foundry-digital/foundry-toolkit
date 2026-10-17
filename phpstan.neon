@@ -20,6 +20,8 @@ parameters:
         - FDHARDEN_DISABLE_FEEDS
         - FDHARDEN_DISABLE_APP_PASSWORDS
         - FDHARDEN_LOCK_REGISTRATION
+        - FDHARDEN_LOCK_PLUGINS
+        - FDHARDEN_LOCK_EXEMPT
         # Defined by whichever copy loads first: ours or an old must-use agent.
         - SITEMANAGER_AGENT_VERSION
         - FOUNDRY_TOOLKIT_PRERELEASES
