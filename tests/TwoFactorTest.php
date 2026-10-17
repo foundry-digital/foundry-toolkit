@@ -80,6 +80,7 @@ final class TwoFactorTest extends TestCase {
 		Functions\when( 'get_bloginfo' )->justReturn( 'UTF-8' );
 		Functions\when( 'sanitize_title' )->alias( fn( $s ) => strtolower( (string) $s ) );
 		Functions\when( 'submit_button' )->justReturn( null );
+		Functions\when( 'plugins_url' )->alias( fn( string $path = '' ) => 'https://example.test/wp-content/plugins/foundry-toolkit/' . $path );
 		Functions\when( 'wp_logout_url' )->justReturn( 'https://example.test/wp-login.php?action=logout&_wpnonce=x' );
 		Foundry_Toolkit_Two_Factor::$halt = static function (): void {
 			throw new SM_Two_Factor_Halt( 'halt' );
@@ -219,6 +220,10 @@ final class TwoFactorTest extends TestCase {
 		$this->assertStringContainsString( Two_Factor_Totp::KEY, $html, 'the key as text' );
 		$this->assertStringContainsString( 'two-factor-qr-code', $html );
 		$this->assertStringContainsString( 'action=logout', $html, 'a way to log out' );
+		$this->assertStringContainsString( 'foundry-toolkit/templates/foundry-logo.svg', $html, 'Foundry Digital branding' );
+		foreach ( array( 'Google Authenticator', 'Microsoft Authenticator', '1Password' ) as $app ) {
+			$this->assertStringContainsString( $app, $html );
+		}
 	}
 
 	public function test_the_wizard_sends_a_user_who_is_not_held_to_the_dashboard(): void {
@@ -231,6 +236,25 @@ final class TwoFactorTest extends TestCase {
 		} catch ( SM_Two_Factor_Halt $e ) {
 			$this->assertSame( array( 'https://example.test/wp-admin/' ), $this->redirects );
 		}
+	}
+
+	public function test_the_wizard_is_a_registered_hidden_page(): void {
+		// wp-admin refuses an unregistered admin.php?page= before admin_init.
+		$this->enable();
+		$this->assertNotFalse( has_action( 'admin_menu', array( Foundry_Toolkit_Two_Factor::class, 'register_page' ) ) );
+		$this->assertNotFalse( has_action( 'network_admin_menu', array( Foundry_Toolkit_Two_Factor::class, 'register_page' ) ) );
+		$calls = array();
+		Functions\when( 'add_submenu_page' )->alias(
+			function ( ...$args ) use ( &$calls ) {
+				$calls[] = $args;
+				return 'admin_page_foundry-two-factor';
+			}
+		);
+		Foundry_Toolkit_Two_Factor::register_page();
+		$this->assertCount( 1, $calls );
+		$this->assertSame( '', $calls[0][0], 'no parent: hidden from the menu' );
+		$this->assertSame( 'read', $calls[0][3] );
+		$this->assertSame( Foundry_Toolkit_Two_Factor::PAGE, $calls[0][4] );
 	}
 
 	public function test_logging_out_is_never_gated(): void {

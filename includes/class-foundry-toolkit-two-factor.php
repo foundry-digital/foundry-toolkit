@@ -63,6 +63,8 @@ final class Foundry_Toolkit_Two_Factor {
 			return;
 		}
 		add_filter( 'login_redirect', array( __CLASS__, 'login_redirect' ), 999, 3 );
+		add_action( 'admin_menu', array( __CLASS__, 'register_page' ) );
+		add_action( 'network_admin_menu', array( __CLASS__, 'register_page' ) );
 		add_action( 'admin_init', array( __CLASS__, 'admin_init' ), 1 );
 		add_action( 'template_redirect', array( __CLASS__, 'template_redirect' ), 1 );
 		add_filter( 'rest_pre_dispatch', array( __CLASS__, 'rest_pre_dispatch' ), 10, 3 );
@@ -145,6 +147,21 @@ final class Foundry_Toolkit_Two_Factor {
 			return array();
 		}
 		return array_values( array_filter( array_map( 'strtolower', array_map( 'trim', explode( ',', FDHARDEN_2FA_EXEMPT ) ) ) ) );
+	}
+
+	/**
+	 * Register the wizard as a hidden admin page. wp-admin refuses an
+	 * unregistered admin.php?page= before admin_init runs, and admin_init
+	 * prints the wizard, so the callback never does.
+	 *
+	 * @return void
+	 */
+	public static function register_page() {
+		if ( ! self::active() ) {
+			return;
+		}
+		$title = __( 'Set up two-factor authentication', 'foundry-toolkit' );
+		add_submenu_page( '', $title, $title, 'read', self::PAGE, '__return_null' );
 	}
 
 	/**
@@ -316,6 +333,7 @@ final class Foundry_Toolkit_Two_Factor {
 		$form_url   = self::wizard_url();
 		$logout_url = wp_logout_url();
 		$site_name  = get_bloginfo( 'name' );
+		$logo_url   = plugins_url( 'templates/foundry-logo.svg', FOUNDRY_TOOLKIT_FILE );
 		require dirname( __DIR__ ) . '/templates/two-factor-wizard.php';
 	}
 
