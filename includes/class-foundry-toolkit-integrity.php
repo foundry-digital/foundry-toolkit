@@ -46,8 +46,16 @@ final class Foundry_Toolkit_Integrity {
 	/** The option prefix for a premium plugin's or a theme's baseline (1.7.0). */
 	public const BASELINE_OPTION = 'sm_integrity_base_';
 
-	/** The most entries any list in places returns (P67). */
+	/** The most entries any list in places returns but loose (P67). */
 	public const MAX_PLACES = 50;
+
+	/**
+	 * The most loose files places returns (P67, 1.12.0). Every loose file is
+	 * hashed before the cut anyway, so only the answer grows, about 200 KB
+	 * at the cap; a site with dozens of legitimate ones still sends a
+	 * whole list, so a removed file can be seen to be gone.
+	 */
+	public const MAX_LOOSE = 1000;
 
 	/** Seconds the walk of the uploads folder may take (P67). */
 	public const UPLOADS_BUDGET = 10.0;
@@ -660,8 +668,8 @@ final class Foundry_Toolkit_Integrity {
 
 		$counts   = self::admin_counts();
 		$triggers = array_values( array_map( 'strval', self::trigger_tables() ) );
-		$cut      = false;
-		foreach ( array( $loose, $archives, $copies, $mu_list, $triggers ) as $list ) {
+		$cut      = count( array_filter( $loose ) ) > self::MAX_LOOSE;
+		foreach ( array( $archives, $copies, $mu_list, $triggers ) as $list ) {
 			$cut = $cut || count( array_filter( $list ) ) > self::MAX_PLACES;
 		}
 		return array(
@@ -699,7 +707,7 @@ final class Foundry_Toolkit_Integrity {
 		}
 		ksort( $out );
 		$rows = array();
-		foreach ( array_slice( $out, 0, self::MAX_PLACES, true ) as $rel => $fingerprint ) {
+		foreach ( array_slice( $out, 0, self::MAX_LOOSE, true ) as $rel => $fingerprint ) {
 			$rows[] = array(
 				'file'        => (string) $rel,
 				'fingerprint' => $fingerprint,

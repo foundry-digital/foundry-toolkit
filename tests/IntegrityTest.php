@@ -553,6 +553,46 @@ final class IntegrityTest extends UpdateSupport {
 		$this->assertStringNotContainsString( 'hidden loader', $json, 'S14: no file contents' );
 	}
 
+	/**
+	 * 1.12.0: the loose list holds 1000 files, so a site with dozens of
+	 * legitimate ones (Gravity PDF's templates and fonts) still sends a
+	 * whole list and a removed file can be seen to be gone. Past 1000 it is
+	 * cut and says so; the other lists stay at 50.
+	 */
+	public function test_loose_list_holds_a_thousand(): void {
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0;
+		$this->installed                  = array();
+		$font                             = 'wp-content/uploads/PDF_EXTENDED_TEMPLATES/fonts/fontdata/f%04d.php';
+		$zip                              = 'wp-content/uploads/%016x.zip';
+		for ( $i = 0; $i < 60; $i++ ) {
+			$this->put( sprintf( $font, $i ), '<?php return array();' );
+			$this->put( sprintf( $zip, $i + 0x1000000000000000 ), 'PK' );
+		}
+		$p = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertCount( 60, $p['loose'], 'sixty loose files are all listed' );
+		$this->assertCount( Foundry_Toolkit_Integrity::MAX_PLACES, $p['archives'] );
+		$this->assertTrue( $p['truncated'], 'the archives were cut at 50' );
+
+		for ( $i = 0; $i < 60; $i++ ) {
+			unlink( $this->site_root . sprintf( $zip, $i + 0x1000000000000000 ) );
+		}
+		for ( $i = 60; $i <= Foundry_Toolkit_Integrity::MAX_LOOSE; $i++ ) {
+			$this->put( sprintf( $font, $i ), '<?php return array();' );
+		}
+		$this->expire();
+		$p = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertSame( 1000, Foundry_Toolkit_Integrity::MAX_LOOSE );
+		$this->assertCount( Foundry_Toolkit_Integrity::MAX_LOOSE, $p['loose'] );
+		$this->assertSame( sprintf( $font, 0 ), $p['loose'][0]['file'], 'sorted, then cut' );
+		$this->assertTrue( $p['truncated'], 'one file past 1000 cuts the list' );
+
+		unlink( $this->site_root . sprintf( $font, Foundry_Toolkit_Integrity::MAX_LOOSE ) );
+		$this->expire();
+		$p = Foundry_Toolkit_Integrity::run()['places'];
+		$this->assertCount( Foundry_Toolkit_Integrity::MAX_LOOSE, $p['loose'] );
+		$this->assertFalse( $p['truncated'], 'exactly 1000 is whole' );
+	}
+
 	/** 1.9.0: a huge uploads folder stops at its own limit and says so. */
 	public function test_places_uploads_walk_stops_at_its_limit(): void {
 		for ( $i = 0; $i < 600; $i++ ) {
