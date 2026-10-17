@@ -31,7 +31,7 @@ $foundry_toolkit_codes_text = implode( "\n", $state['codes'] ) . "\n";
 	<style>
 		body.foundry-toolkit-2fa { background: #f0f0f1; margin: 0; height: auto; }
 		.foundry-toolkit-2fa .wrap { max-width: 580px; margin: 40px auto; padding: 0 16px; }
-		.foundry-toolkit-2fa .brand { display: block; width: 64px; height: 64px; margin: 20px 0 0; border-radius: 8px; }
+		.foundry-toolkit-2fa .brand { display: block; width: 64px; height: 64px; margin: 20px 0 24px; border-radius: 8px; }
 		.foundry-toolkit-2fa .card { max-width: none; padding: 8px 28px 28px; border-top: 4px solid #5634d1; }
 		.foundry-toolkit-2fa h1 { font-size: 24px; line-height: 1.3; }
 		.foundry-toolkit-2fa h2 { font-size: 16px; margin: 0 0 .5em; }
@@ -47,7 +47,7 @@ $foundry_toolkit_codes_text = implode( "\n", $state['codes'] ) . "\n";
 		.foundry-toolkit-2fa .button-primary:hover,
 		.foundry-toolkit-2fa .button-primary:focus { background: #4527b0; border-color: #4527b0; }
 		.foundry-toolkit-2fa a { color: #5634d1; }
-		.foundry-toolkit-2fa .footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 16px; color: #50575e; }
+		.foundry-toolkit-2fa .footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 16px; padding-bottom: 40px; color: #50575e; }
 	</style>
 </head>
 <body class="wp-core-ui foundry-toolkit-2fa">
@@ -108,7 +108,7 @@ $foundry_toolkit_codes_text = implode( "\n", $state['codes'] ) . "\n";
 	<?php endif; ?>
 	</div>
 	<div class="footer">
-		<span><?php esc_html_e( 'Stuck? Get in touch with Foundry Digital and we will sort it out.', 'foundry-toolkit' ); ?></span>
+		<span><?php esc_html_e( 'Stuck?', 'foundry-toolkit' ); ?> <a href="mailto:contact@foundrydigital.com.au"><?php esc_html_e( 'Get in touch with Foundry Digital and we will sort it out.', 'foundry-toolkit' ); ?></a></span>
 		<a href="<?php echo esc_url( $logout_url ); ?>"><?php esc_html_e( 'Log out', 'foundry-toolkit' ); ?></a>
 	</div>
 </div>

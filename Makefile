@@ -16,7 +16,7 @@ lint: vendor
 
 ## analyse: PHPStan level 8, PHP 7.4 semantics
 analyse: vendor
-	$(VENDOR)/phpstan analyse --no-progress --memory-limit=1G
+	$(VENDOR)/phpstan analyse --no-progress --memory-limit=2G
 
 ## test: PHPUnit with Brain Monkey, no WordPress needed
 test: vendor
