@@ -107,6 +107,9 @@ final class Foundry_Toolkit_Hardening {
 			add_filter( 'pre_option_users_can_register', '__return_zero' );
 			add_filter( 'pre_option_default_role', array( __CLASS__, 'subscriber' ) );
 		}
+		// With the lock off too: a site that lets visitors register can still
+		// never hand them a held role (ticket 071).
+		add_filter( 'option_default_role', array( __CLASS__, 'safe_default_role' ) );
 		if ( FDHARDEN_LOCK_PLUGINS ) {
 			require_once __DIR__ . '/class-foundry-toolkit-plugin-lock.php';
 			Foundry_Toolkit_Plugin_Lock::boot();
@@ -152,10 +155,11 @@ final class Foundry_Toolkit_Hardening {
 			// nobody can add, upload, delete or edit them, or deactivate
 			// this plugin. Updates keep working (1.12.0). Off on a local site.
 			'FDHARDEN_LOCK_PLUGINS'          => ! FDHARDEN_IS_LOCAL,
-			// Holds every administrator and editor without an
-			// authenticator app at the setup wizard (ADR 0035). Needs the
-			// Two Factor plugin: without it nobody is held. Off only in an
-			// emergency, such as every administrator locked out.
+			// Holds every privileged account (administrators, editors,
+			// shop managers, ticket 071) without an authenticator app at
+			// the setup wizard (ADR 0035). Needs the Two Factor plugin:
+			// without it nobody is held. Off only in an emergency, such as
+			// every administrator locked out.
 			'FDHARDEN_REQUIRE_2FA'           => true,
 		);
 		foreach ( $defaults as $name => $value ) {
@@ -731,5 +735,17 @@ final class Foundry_Toolkit_Hardening {
 	 */
 	public static function subscriber() {
 		return 'subscriber';
+	}
+
+	/**
+	 * Filter option_default_role: subscriber in place of any role that can
+	 * do a held capability (administrator, editor, shop manager, or a role
+	 * given one of those). Portal and member roles pass through unchanged.
+	 *
+	 * @param mixed $role The stored default role.
+	 * @return mixed
+	 */
+	public static function safe_default_role( $role ) {
+		return is_string( $role ) && Foundry_Toolkit_Privilege::role_is_held( $role ) ? 'subscriber' : $role;
 	}
 }

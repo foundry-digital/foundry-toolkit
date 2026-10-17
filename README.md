@@ -29,17 +29,17 @@ Define any of these in `wp-config.php` to opt a site out. All default to on exce
 | `FDHARDEN_DISABLE_COMMENTS` | true | The site runs comments. WooCommerce product reviews stay while reviews are on in WooCommerce. |
 | `FDHARDEN_DISABLE_FEEDS` | true | Anything reads the site's RSS. |
 | `FDHARDEN_DISABLE_APP_PASSWORDS` | true | An integration signs in with an application password. |
-| `FDHARDEN_LOCK_REGISTRATION` | true | Visitors register through `wp-login.php`. WooCommerce and Gravity Forms are unaffected either way. |
+| `FDHARDEN_LOCK_REGISTRATION` | true | Visitors register through `wp-login.php`. WooCommerce and Gravity Forms are unaffected either way. On or off, the default role is never one that can do a held capability: an administrator, editor or shop manager default reads as subscriber (1.15.0). |
 | `FDHARDEN_LOCK_PLUGINS` | true (false on a local site) | You need to add a plugin or theme: set it to false for a moment, then take the line out. While it is on, nobody can add, upload, delete or edit plugins and themes in wp-admin, or deactivate Foundry Toolkit; no account is exempt (1.12.0). Updating still works for every administrator: the Update buttons, WordPress's automatic updates and Site Manager's. |
-| `FDHARDEN_REQUIRE_2FA` | true | Only in an emergency, such as every administrator locked out. Administrators and editors must set up an authenticator app before they can use the site (below). |
+| `FDHARDEN_REQUIRE_2FA` | true | Only in an emergency, such as every administrator locked out. Administrators, editors, shop managers and anyone given administrator-level powers must set up an authenticator app before they can use the site (below). |
 
-## Required 2FA for administrators and editors
+## Required 2FA for privileged accounts
 
-On every site with the WordPress.org [Two Factor](https://wordpress.org/plugins/two-factor/) plugin (0.17.0 or later) active, an administrator or editor without an authenticator app is sent to a setup wizard as soon as they log in, and every other page sends them back to it until they finish: scan the QR code, enter a code, save the backup codes (ADR 0035 in the Site Manager repository). It is like a building that issues every key holder a swipe card at the front desk before they reach the lifts: the card system is the Two Factor plugin's, the Toolkit only stands at the desk.
+On every site with the WordPress.org [Two Factor](https://wordpress.org/plugins/two-factor/) plugin (0.17.0 or later) active, a privileged account without an authenticator app is sent to a setup wizard as soon as they log in, and every other page sends them back to it until they finish: scan the QR code, enter a code, save the backup codes (ADR 0035 in the Site Manager repository). It is like a building that issues every key holder a swipe card at the front desk before they reach the lifts: the card system is the Two Factor plugin's, the Toolkit only stands at the desk.
 
 - On by default. Installing the Two Factor plugin is what switches it on for a site, so reset the administrators' and editors' passwords first: a password leaked earlier could otherwise enrol the attacker's phone.
 - Only the plugin's authenticator app (TOTP) counts. Email codes do not.
-- Every administrator and editor, with no exemptions, a host's support account included. Shop managers, customers and members are never touched. Nor are WP-CLI and cron.
+- Decided by capability, not role name (ticket 071): anyone who can `manage_options`, `promote_users`, `edit_users`, `create_users`, `delete_users`, `activate_plugins` or `edit_others_posts`, and super admins. That is administrators, editors and shop managers, plus any role given one of those. No exemptions, a host's support account included. Customers, members and portal roles (subscriber capabilities) are never touched. Nor are WP-CLI and cron.
 - While someone is held, only the wizard, logging out, the plugin's own REST routes (`two-factor/1.0`) and the Heartbeat get through. Any other REST request is refused with a 403.
 - Without the plugin, nobody is held, and the Site Manager report says so (`users.two_factor_plugin_missing`).
 

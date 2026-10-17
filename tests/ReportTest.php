@@ -184,6 +184,33 @@ final class ReportTest extends TestCase {
 		$this->assertFalse( $r['agent']['hardening'] );
 	}
 
+	public function test_report_counts_privileged_accounts_by_capability(): void {
+		$asked = array();
+		Functions\when( 'get_users' )->alias(
+			static function ( array $args ) use ( &$asked ): array {
+				$asked[] = $args;
+				return array( 7, 1, 2 );
+			}
+		);
+		$users = SiteManager_Agent::build_report()['users'];
+
+		$this->assertSame( 3, $users['privileged_users'] );
+		// Sorted IDs joined with commas, so the same accounts always give
+		// the same fingerprint (ticket 071).
+		$this->assertSame( hash( 'sha256', '1,2,7' ), $users['privileged_users_hash'] );
+		$this->assertContains( Foundry_Toolkit_Privilege::ADMIN_CAPS, array_column( $asked, 'capability__in' ) );
+	}
+
+	public function test_privileged_fingerprint_changes_when_an_account_is_swapped(): void {
+		Functions\when( 'get_users' )->justReturn( array( 1, 2, 7 ) );
+		$before = SiteManager_Agent::build_report()['users'];
+		Functions\when( 'get_users' )->justReturn( array( 1, 2, 9 ) );
+		$after = SiteManager_Agent::build_report()['users'];
+
+		$this->assertSame( $before['privileged_users'], $after['privileged_users'] );
+		$this->assertNotSame( $before['privileged_users_hash'], $after['privileged_users_hash'] );
+	}
+
 	public function test_report_lists_every_installed_theme(): void {
 		$r = SiteManager_Agent::build_report();
 		$this->assertSame(

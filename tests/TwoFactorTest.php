@@ -62,6 +62,17 @@ final class TwoFactorTest extends TestCase {
 		Functions\when( 'is_user_logged_in' )->alias( fn() => null !== $this->current );
 		Functions\when( 'is_multisite' )->alias( fn() => $this->multisite );
 		Functions\when( 'is_super_admin' )->alias( fn( int $id ) => 7 === $id );
+		$caps = sm_test_role_caps();
+		Functions\when( 'user_can' )->alias(
+			static function ( $user, string $cap ) use ( $caps ): bool {
+				foreach ( (array) $user->roles as $role ) {
+					if ( ! empty( $caps[ $role ][ $cap ] ) ) {
+						return true;
+					}
+				}
+				return false;
+			}
+		);
 		Functions\when( 'wp_doing_ajax' )->justReturn( false );
 		Functions\when( 'update_user_meta' )->alias(
 			function ( int $id, string $key, $value ): bool {
@@ -127,7 +138,14 @@ final class TwoFactorTest extends TestCase {
 			'administrator with TOTP'              => array( new WP_User( 2, 'sam', 'sam@example.test', array( 'administrator' ) ), false ),
 			'editor without TOTP'                  => array( new WP_User( 3, 'ed', 'ed@example.test', array( 'editor' ) ), true ),
 			'editor with TOTP'                     => array( new WP_User( 11, 'eve', 'eve@example.test', array( 'editor' ) ), false ),
-			'shop manager'                         => array( new WP_User( 12, 'shop', 'shop@example.test', array( 'shop_manager' ) ), false ),
+			// By capability since ticket 071: shop managers can edit others'
+			// content and run the shop, so they are held too.
+			'shop manager'                         => array( new WP_User( 12, 'shop', 'shop@example.test', array( 'shop_manager' ) ), true ),
+			'custom role with manage_options'      => array( new WP_User( 13, 'boss', 'boss@example.test', array( 'site_boss' ) ), true ),
+			'author'                               => array( new WP_User( 14, 'au', 'au@example.test', array( 'author' ) ), false ),
+			'shop customer'                        => array( new WP_User( 15, 'cu', 'cu@example.test', array( 'customer' ) ), false ),
+			'AMA gallery'                          => array( new WP_User( 16, 'ga', 'ga@example.test', array( 'gallery' ) ), false ),
+			'AMA exhibitor and VIP'                => array( new WP_User( 17, 'ex', 'ex@example.test', array( 'exhibitor', 'vip' ) ), false ),
 			'subscriber'                           => array( new WP_User( 4, 'sub', 'sub@example.test', array( 'subscriber' ) ), false ),
 			'host support login, no exemptions'    => array( new WP_User( 5, 'wpengine', 'wpe@example.test', array( 'administrator' ) ), true ),
 			'administrator with email codes alone' => array( new WP_User( 6, 'mo', 'mo@example.test', array( 'administrator' ) ), true ),

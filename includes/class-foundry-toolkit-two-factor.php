@@ -1,6 +1,6 @@
 <?php
 /**
- * Required two-factor authentication for administrators and editors (ADR
+ * Required two-factor authentication for privileged accounts (ADR
  * 0035 in the Site Manager repository, ticket 070).
  *
  * @package FoundryToolkit
@@ -11,11 +11,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Holds every administrator and editor without an authenticator app at a
- * setup wizard until they set one up. On by default; FDHARDEN_REQUIRE_2FA
- * false in wp-config.php switches it off. The 2FA itself
- * is the WordPress.org Two Factor plugin's: this class never stores a secret
- * or checks a code, it calls the plugin's TOTP provider and backup codes.
+ * Holds every privileged account (Foundry_Toolkit_Privilege::HELD_CAPS)
+ * without an authenticator app at a setup wizard until they set one up. On
+ * by default; FDHARDEN_REQUIRE_2FA false in wp-config.php switches it off.
+ * The 2FA itself is the WordPress.org Two Factor plugin's: this class never
+ * stores a secret or checks a code, it calls the plugin's TOTP provider and
+ * backup codes.
  *
  * With the Two Factor plugin inactive it holds nobody, rather than lock
  * everyone out, so installing that plugin is what switches it on. WP-CLI and cron never pass through it.
@@ -30,9 +31,6 @@ final class Foundry_Toolkit_Two_Factor {
 
 	/** The Two Factor plugin's REST namespace, which a held user may reach. */
 	public const REST_NAMESPACE = '/two-factor/1.0';
-
-	/** Roles held until they set up an authenticator app (James, 2026-10-17). */
-	public const ROLES = array( 'administrator', 'editor' );
 
 	/** The only provider that releases a held user (ADR 0035, point 4). */
 	public const TOTP = 'Two_Factor_Totp';
@@ -116,10 +114,13 @@ final class Foundry_Toolkit_Two_Factor {
 	}
 
 	/**
-	 * Whether a user must finish the wizard before anything else: an
-	 * administrator, editor or super admin without the plugin's TOTP enabled and a
-	 * key saved. Email codes alone do not count. Nobody in those roles is
-	 * exempt, a host's support account included (James, 2026-10-17).
+	 * Whether a user must finish the wizard before anything else: anyone who
+	 * can do a held capability (administrators, editors, shop managers, a
+	 * role given administrator-level powers) or a super admin, without the
+	 * plugin's TOTP enabled and a key saved. Decided by capability, not role
+	 * name (ADR 0035 as amended, ticket 071), so portal and member roles are
+	 * never held. Email codes alone do not count. Nobody held is exempt, a
+	 * host's support account included (James, 2026-10-17).
 	 *
 	 * @param WP_User $user The user.
 	 * @return bool
@@ -128,8 +129,7 @@ final class Foundry_Toolkit_Two_Factor {
 		if ( ! self::active() || ! $user instanceof WP_User || $user->ID <= 0 ) {
 			return false;
 		}
-		$covered = array() !== array_intersect( self::ROLES, (array) $user->roles ) || ( is_multisite() && is_super_admin( $user->ID ) );
-		if ( ! $covered ) {
+		if ( ! Foundry_Toolkit_Privilege::is_held_user( $user ) ) {
 			return false;
 		}
 		$supported = Two_Factor_Core::get_supported_providers_for_user( $user );
