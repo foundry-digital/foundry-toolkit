@@ -101,7 +101,9 @@
     "administrators": 3,
     "administrators_with_2fa": 2,
     "two_factor_source": "wordfence",
-    "has_admin_username": false
+    "has_admin_username": false,
+    "two_factor_required": true,
+    "two_factor_plugin_missing": false
   },
   "constants": {
     "DISALLOW_FILE_EDIT": true,

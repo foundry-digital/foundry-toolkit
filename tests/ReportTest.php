@@ -158,6 +158,8 @@ final class ReportTest extends TestCase {
 		$this->assertSame( 2, $r['users']['administrators_with_2fa'] );
 		$this->assertSame( 'wordfence', $r['users']['two_factor_source'] );
 		$this->assertTrue( $r['users']['has_admin_username'] );
+		$this->assertFalse( $r['users']['two_factor_required'], '2FA is not required unless the gate booted' );
+		$this->assertFalse( $r['users']['two_factor_plugin_missing'] );
 		$this->assertSame( 'learning', $r['security']['wordfence_firewall_mode'] );
 		$this->assertSame( '/wp-login.php', $r['security']['login_path'] );
 		$this->assertCount( 3, $r['plugins'] );

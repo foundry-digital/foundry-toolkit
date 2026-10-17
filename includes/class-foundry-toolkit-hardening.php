@@ -152,6 +152,11 @@ final class Foundry_Toolkit_Hardening {
 			// nobody can add, upload, delete or edit them, or deactivate
 			// this plugin. Updates keep working (1.12.0). Off on a local site.
 			'FDHARDEN_LOCK_PLUGINS'          => ! FDHARDEN_IS_LOCAL,
+			// Holds every administrator and editor without an
+			// authenticator app at the setup wizard (ADR 0035). Needs the
+			// Two Factor plugin: without it nobody is held. Off only in an
+			// emergency, such as every administrator locked out.
+			'FDHARDEN_REQUIRE_2FA'           => true,
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {

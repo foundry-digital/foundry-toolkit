@@ -10,6 +10,7 @@ parameters:
     scanFiles:
         - tests/phpstan-constants.php
         - tests/phpstan-cache-stubs.php
+        - tests/phpstan-two-factor-stubs.php
     treatPhpDocTypesAsCertain: false
     # wp-config.php decides these per site; the stub values are only defaults.
     dynamicConstantNames:
@@ -21,6 +22,7 @@ parameters:
         - FDHARDEN_DISABLE_APP_PASSWORDS
         - FDHARDEN_LOCK_REGISTRATION
         - FDHARDEN_LOCK_PLUGINS
+        - FDHARDEN_REQUIRE_2FA
         # Defined by whichever copy loads first: ours or an old must-use agent.
         - SITEMANAGER_AGENT_VERSION
         - FOUNDRY_TOOLKIT_PRERELEASES
