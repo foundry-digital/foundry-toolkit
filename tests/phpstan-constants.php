@@ -15,6 +15,5 @@ define( 'FDHARDEN_DISABLE_COMMENTS', true );
 define( 'FDHARDEN_DISABLE_FEEDS', true );
 define( 'FDHARDEN_DISABLE_APP_PASSWORDS', true );
 define( 'FDHARDEN_LOCK_REGISTRATION', true );
-define( 'FDHARDEN_LOCK_PLUGINS', false );
-define( 'FDHARDEN_LOCK_EXEMPT', '' );
+define( 'FDHARDEN_LOCK_PLUGINS', true );
 define( 'FOUNDRY_TOOLKIT_PRERELEASES', false );

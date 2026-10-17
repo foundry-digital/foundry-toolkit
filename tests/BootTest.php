@@ -27,6 +27,7 @@ final class BootTest extends TestCase {
 		Functions\when( 'register_activation_hook' )->justReturn( null );
 		Functions\when( 'register_deactivation_hook' )->justReturn( null );
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'plugin_basename' )->justReturn( 'foundry-toolkit/foundry-toolkit.php' );
 		foreach ( glob( WPMU_PLUGIN_DIR . '/*.php' ) ?: array() as $f ) {
 			unlink( $f );
 		}

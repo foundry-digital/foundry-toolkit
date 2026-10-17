@@ -148,12 +148,10 @@ final class Foundry_Toolkit_Hardening {
 			// WooCommerce and Gravity Forms create accounts themselves and
 			// are unaffected either way.
 			'FDHARDEN_LOCK_REGISTRATION'     => true,
-			// On to stop anyone but the logins in FDHARDEN_LOCK_EXEMPT
-			// adding, uploading, deleting or editing plugins and themes.
-			// Updates keep working (1.12.0).
-			'FDHARDEN_LOCK_PLUGINS'          => false,
-			// Foundry's own logins, comma separated, for the lock above.
-			'FDHARDEN_LOCK_EXEMPT'           => '',
+			// Off for a moment to add a plugin or theme: while it is on,
+			// nobody can add, upload, delete or edit them, or deactivate
+			// this plugin. Updates keep working (1.12.0). Off on a local site.
+			'FDHARDEN_LOCK_PLUGINS'          => ! FDHARDEN_IS_LOCAL,
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {

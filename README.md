@@ -20,7 +20,7 @@ On activation the plugin writes `wp-content/mu-plugins/0-foundry-toolkit.php`. T
 
 ## Switches
 
-Define any of these in `wp-config.php` to opt a site out. All default to on except `FDHARDEN_DISALLOW_FILE_MODS` and the plugin lock.
+Define any of these in `wp-config.php` to opt a site out. All default to on except the first.
 
 | Constant | Default | Turn it off (or on) when |
 | --- | --- | --- |
@@ -30,8 +30,7 @@ Define any of these in `wp-config.php` to opt a site out. All default to on exce
 | `FDHARDEN_DISABLE_FEEDS` | true | Anything reads the site's RSS. |
 | `FDHARDEN_DISABLE_APP_PASSWORDS` | true | An integration signs in with an application password. |
 | `FDHARDEN_LOCK_REGISTRATION` | true | Visitors register through `wp-login.php`. WooCommerce and Gravity Forms are unaffected either way. |
-| `FDHARDEN_LOCK_PLUGINS` | false | Turn it on to stop anyone but the logins in `FDHARDEN_LOCK_EXEMPT` adding, uploading, deleting or editing plugins and themes (1.12.0). Updating still works for every administrator: the Update buttons, WordPress's automatic updates and Site Manager's. Other administrators also cannot deactivate Foundry Toolkit, or edit, delete or demote an exempt account, or create a user under an exempt login. With no exempt login named, nobody can add a plugin until the constant is removed. |
-| `FDHARDEN_LOCK_EXEMPT` | `''` | Foundry's own logins, comma separated, such as `'james'`. Name only accounts that exist on the site. |
+| `FDHARDEN_LOCK_PLUGINS` | true (false on a local site) | You need to add a plugin or theme: set it to false for a moment, then take the line out. While it is on, nobody can add, upload, delete or edit plugins and themes in wp-admin, or deactivate Foundry Toolkit; no account is exempt (1.12.0). Updating still works for every administrator: the Update buttons, WordPress's automatic updates and Site Manager's. |
 
 Filters: `fdharden_security_headers`, `fdharden_blocked_anon_rest_routes`, `fdharden_keep_comments_post_types`, `fdharden_jetpack_xmlrpc_prefixes`.
 
