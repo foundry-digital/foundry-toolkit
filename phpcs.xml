@@ -1,13 +1,18 @@
 <?xml version="1.0"?>
 <ruleset name="FoundryToolkit">
-    <description>WordPress coding standards for Foundry Toolkit.</description>
+    <description>WordPress coding standards and PHP 7.4 compatibility for Foundry Toolkit, its tests included.</description>
     <file>foundry-toolkit.php</file>
     <file>includes</file>
     <file>templates</file>
+    <file>tests</file>
+    <!-- A copy of Site Manager's testdata/protocol: never edited here. -->
+    <exclude-pattern>tests/fixtures/*</exclude-pattern>
     <arg name="extensions" value="php"/>
     <arg value="sp"/>
     <rule ref="WordPress"/>
-    <config name="minimum_supported_wp_version" value="6.0"/>
+    <!-- PHPCompatibility reads testVersion: the plugin runs on PHP 7.4 and later. -->
+    <rule ref="PHPCompatibilityWP"/>
+    <config name="minimum_supported_wp_version" value="6.2"/>
     <config name="testVersion" value="7.4-"/>
     <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
         <properties>
@@ -24,5 +29,93 @@
                 <element value="foundry-toolkit"/>
             </property>
         </properties>
+    </rule>
+
+    <!--
+    Tests: every WordPress rule but these, which do not fit PHPUnit and Brain
+    Monkey. Test classes are named for PHPUnit, not class-*.php; test methods
+    name what they test, so a docblock on each would only repeat it; doubles
+    of WordPress and third-party code keep those names, namespaces and
+    signatures (wpdb, Two_Factor_Core, Elementor), several to a file; and the
+    tests write temporary files, set request globals and encode fixtures on
+    purpose. Each is excluded by its exact code, so nothing else is lost.
+    -->
+    <rule ref="WordPress.Files.FileName.InvalidClassFileName">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Generic.Commenting.DocComment.MissingShort">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Squiz.Commenting.FunctionComment.Missing">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Squiz.Commenting.FunctionComment.MissingParamTag">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Generic.Files.OneObjectStructurePerFile.MultipleFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Universal.Files.SeparateFunctionsFromOO.Mixed">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Generic.Classes.DuplicateClassName.Found">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Universal.Namespaces.DisallowCurlyBraceSyntax.Forbidden">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Universal.Namespaces.DisallowDeclarationWithoutName.Forbidden">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Universal.Namespaces.OneDeclarationPerFile.MultipleFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="PEAR.NamingConventions.ValidClassName.StartWithCapital">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedNamespaceFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Universal.NamingConventions.NoReservedKeywordParameterNames">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Generic.CodeAnalysis.UnusedFunctionParameter.Found">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.WP.AlternativeFunctions">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.Security.NonceVerification.Missing">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.Security.NonceVerification.Recommended">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.Security.EscapeOutput.ExceptionNotEscaped">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.PHP.DiscouragedPHPFunctions">
+        <exclude-pattern>tests/*</exclude-pattern>
     </rule>
 </ruleset>

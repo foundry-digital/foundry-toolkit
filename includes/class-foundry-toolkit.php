@@ -61,8 +61,12 @@ final class Foundry_Toolkit {
 				self::$leftovers[] = $f;
 			}
 		}
-		// The old must-use hardening defines FDHARDEN_IS_LOCAL; since 1.16.0 we never do.
-		$old_hardening = defined( 'FDHARDEN_IS_LOCAL' ) && ! ( class_exists( 'Foundry_Toolkit_Hardening', false ) && Foundry_Toolkit_Hardening::$booted );
+		// The old must-use hardening is found by its file only. Its constant
+		// FDHARDEN_IS_LOCAL is not a sign of it: a line left in wp-config.php
+		// would switch off every lock and the 2FA hold (ticket 074). The old
+		// file declares functions, not our classes, so a renamed copy running
+		// beside us is harmless.
+		$old_hardening = false;
 		if ( is_file( Foundry_Toolkit_Loader::mu_dir() . '/' . self::OLD_HARDENING_FILE ) ) {
 			$old_hardening     = true;
 			self::$leftovers[] = self::OLD_HARDENING_FILE;

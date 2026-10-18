@@ -13,6 +13,10 @@ use Brain\Monkey;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * Base test case for the update tests: builds the fake site, mocks the
+ * WordPress functions and provides request and assertion helpers.
+ */
 abstract class UpdateSupport extends TestCase {
 
 	/** @var array<string, mixed> */
@@ -81,7 +85,7 @@ abstract class UpdateSupport extends TestCase {
 			return $this->upgrader;
 		};
 
-		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false ); // no persistent object cache unless a test says so
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false ); // No persistent object cache unless a test says so.
 		Functions\when( 'get_transient' )->alias( fn( string $k ) => $this->transients[ $k ] ?? false );
 		Functions\when( 'set_transient' )->alias(
 			function ( string $k, $v ): bool {
@@ -197,18 +201,27 @@ abstract class UpdateSupport extends TestCase {
 		file_put_contents( $dir . '/style.css', "/*\nTheme Name: Test\nVersion: {$version}\n*/\n" );
 	}
 
-	/** @param mixed $body Body, encoded as JSON unless a string. */
+	/**
+	 * Build a REST request.
+	 *
+	 * @param string $route Route under /sitemanager/v1/.
+	 * @param mixed  $body  Body, encoded as JSON unless a string.
+	 */
 	protected function post( string $route, $body ): WP_REST_Request {
 		$raw = is_string( $body ) ? $body : (string) wp_json_encode_test( $body );
 		return new WP_REST_Request( 'POST', '/sitemanager/v1/' . $route, array( 'X-SM-Nonce' => str_repeat( 'a', 32 ) ), $raw );
 	}
 
-	/** @param mixed $response A WP_Error or WP_REST_Response. */
+	/**
+	 * @param mixed $response A WP_Error or WP_REST_Response.
+	 */
 	protected function code( $response ): string {
 		return $response instanceof WP_Error ? $response->get_error_code() : 'ok';
 	}
 
-	/** @param mixed $response A WP_Error. */
+	/**
+	 * @param mixed $response A WP_Error.
+	 */
 	protected function status( $response ): int {
 		$this->assertInstanceOf( WP_Error::class, $response );
 		$data = $response->get_error_data();

@@ -17,7 +17,7 @@ final class CacheClearTest extends UpdateSupport {
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->calls = array();
+		$this->calls                              = array();
 		$this->plugins['elementor/elementor.php'] = array(
 			'Name'    => 'Elementor',
 			'Version' => '3.30.2',
@@ -53,7 +53,7 @@ final class CacheClearTest extends UpdateSupport {
 				return $answer;
 			};
 		}
-		$tools['mute_cdn'] = function ( bool $mute ) {
+		$tools['mute_cdn']              = function ( bool $mute ) {
 			$this->calls[] = $mute ? 'mute' : 'unmute';
 		};
 		SiteManager_Agent::$cache_tools = $tools;
@@ -172,7 +172,7 @@ final class CacheClearTest extends UpdateSupport {
 			$this->upgrader->result = false;
 			return $this->upgrader;
 		};
-		$res = $this->update_plugin( 'gravityforms/gravityforms.php', '2.9.13' );
+		$res                                 = $this->update_plugin( 'gravityforms/gravityforms.php', '2.9.13' );
 		$this->assertSame( 'sm_upgrade_failed', $this->code( $res ) );
 		$this->assertSame( array(), $this->calls );
 	}

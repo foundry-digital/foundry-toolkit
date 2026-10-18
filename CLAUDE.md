@@ -6,7 +6,7 @@ Run `make check` before calling anything done.
 
 ## Rules
 
-- PHP 7.4 compatible. WordPress coding standards (phpcs), PHPStan level 8, PHPUnit with Brain Monkey; tests before code.
+- PHP 7.4 compatible (PHPCompatibilityWP checks it). WordPress coding standards (phpcs, tests included), PHPStan level max, PHPUnit with Brain Monkey; tests before code.
 - The agent protocol is `docs/protocol.md` in the Site Manager repository. Change it there first, then here. `tests/fixtures/protocol/` is a copy of Site Manager's `testdata/protocol/`: never edit it here, copy it across.
 - Nothing may break a WooCommerce or Gravity Forms payment. Keep `tests/HardeningTest.php` honest.
 - The plugin never updates a site on its own: automatic updates stay off for it, and the update endpoint only runs from a signed request James triggered.

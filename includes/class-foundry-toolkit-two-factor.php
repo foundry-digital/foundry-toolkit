@@ -39,6 +39,17 @@ final class Foundry_Toolkit_Two_Factor {
 	/** The backup codes provider, the way back in after a lost phone. */
 	public const BACKUP_CODES = 'Two_Factor_Backup_Codes';
 
+	/** What runs on a heartbeat, none of it for a held user (ticket 074). */
+	public const HEARTBEAT_HOOKS = array(
+		'wp_refresh_nonces',
+		'heartbeat_received',
+		'heartbeat_send',
+		'heartbeat_tick',
+		'heartbeat_nopriv_received',
+		'heartbeat_nopriv_send',
+		'heartbeat_nopriv_tick',
+	);
+
 	/**
 	 * Whether boot() has run in this request.
 	 *
@@ -198,11 +209,29 @@ final class Foundry_Toolkit_Two_Factor {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- reading the action name only.
 			$action = isset( $_POST['action'] ) ? sanitize_text_field( wp_unslash( $_POST['action'] ) ) : '';
 			if ( 'heartbeat' === $action ) {
+				// Last, after any admin_init callback that adds a handler.
+				add_action( 'wp_ajax_heartbeat', array( __CLASS__, 'mute_heartbeat' ), PHP_INT_MIN );
 				return;
 			}
 			wp_die( esc_html( self::refusal() ), '', array( 'response' => 403 ) );
 		}
 		self::redirect( self::wizard_url() );
+	}
+
+	/**
+	 * Before core answers a held user's heartbeat: take away its handlers, so
+	 * it answers with the server time alone. ADR 0035 lets the heartbeat
+	 * through to keep the session alive, not what runs on it: core's own
+	 * handlers hand out a fresh heartbeat nonce and each post's update nonce
+	 * (wp_refresh_nonces), and heartbeat_autosave then saves over the user's
+	 * drafts, with nothing but a password (ticket 074, M1).
+	 *
+	 * @return void
+	 */
+	public static function mute_heartbeat() {
+		foreach ( self::HEARTBEAT_HOOKS as $hook ) {
+			remove_all_filters( $hook );
+		}
 	}
 
 	/**

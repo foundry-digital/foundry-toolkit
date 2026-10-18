@@ -10,11 +10,11 @@ vendor: composer.json composer.lock
 	composer install --quiet
 	@touch vendor
 
-## lint: PHP_CodeSniffer, WordPress ruleset
+## lint: PHP_CodeSniffer: WordPress ruleset and PHP 7.4 compatibility, tests included
 lint: vendor
 	$(VENDOR)/phpcs -q
 
-## analyse: PHPStan level 8, PHP 7.4 semantics
+## analyse: PHPStan at its strictest level (max), PHP 7.4 semantics
 analyse: vendor
 	$(VENDOR)/phpstan analyse --no-progress --memory-limit=2G
 

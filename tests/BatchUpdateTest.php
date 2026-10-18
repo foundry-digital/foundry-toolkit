@@ -26,21 +26,21 @@ final class BatchUpdateTest extends UpdateSupport {
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->upgraders = array();
-		$this->checks    = array();
-		$this->cache_runs = 0;
+		$this->upgraders                          = array();
+		$this->checks                             = array();
+		$this->cache_runs                         = 0;
 		$this->plugins['wp-rocket/wp-rocket.php'] = array(
 			'Name'    => 'WP Rocket',
 			'Version' => '3.18',
 		);
 		$this->write_plugin( 'wp-rocket/wp-rocket.php', '3.18' );
 		$this->site_transients['update_plugins']->response['wp-rocket/wp-rocket.php'] = (object) array( 'new_version' => '3.19' );
-		$this->active['wp-rocket/wp-rocket.php'] = true;
+		$this->active['wp-rocket/wp-rocket.php']                                      = true;
 
 		SiteManager_Agent::$upgrader_factory = function ( string $type, Automatic_Upgrader_Skin $skin ) {
-			$u              = new SM_Test_Upgrader( $skin );
-			$skin->messages = array( 'Downloading update from https://example.test/x.zip?key=SECRET', 'Updated ' . $type . '.' );
-			$u->on_upgrade  = function ( $what ) use ( $type ) {
+			$u                 = new SM_Test_Upgrader( $skin );
+			$skin->messages    = array( 'Downloading update from https://example.test/x.zip?key=SECRET', 'Updated ' . $type . '.' );
+			$u->on_upgrade     = function ( $what ) use ( $type ) {
 				foreach ( (array) $what as $item ) {
 					if ( 'plugin' === $type && is_string( $item ) ) {
 						$this->write_plugin( $item, (string) $this->site_transients['update_plugins']->response[ $item ]->new_version );
@@ -53,8 +53,8 @@ final class BatchUpdateTest extends UpdateSupport {
 			$this->upgraders[] = $u;
 			return $u;
 		};
-		SiteManager_Agent::$report_factory = static fn() => array( 'protocol' => 1 );
-		SiteManager_Agent::$cache_tools    = array(
+		SiteManager_Agent::$report_factory   = static fn() => array( 'protocol' => 1 );
+		SiteManager_Agent::$cache_tools      = array(
 			'wp_rocket' => function () {
 				++$this->cache_runs;
 				return true;
@@ -169,13 +169,13 @@ final class BatchUpdateTest extends UpdateSupport {
 
 	public function test_a_failed_plugin_is_reported_with_the_licence_hint(): void {
 		SiteManager_Agent::$upgrader_factory = function ( string $type, Automatic_Upgrader_Skin $skin ) {
-			$u                = new SM_Test_Upgrader( $skin );
-			$skin->messages   = array( 'Your license key is not valid for this site (403).' );
-			$u->per_item      = array( 'gravityforms/gravityforms.php' => new WP_Error( 'download_failed', 'Download failed. Forbidden' ) );
+			$u                 = new SM_Test_Upgrader( $skin );
+			$skin->messages    = array( 'Your license key is not valid for this site (403).' );
+			$u->per_item       = array( 'gravityforms/gravityforms.php' => new WP_Error( 'download_failed', 'Download failed. Forbidden' ) );
 			$this->upgraders[] = $u;
 			return $u;
 		};
-		$data = $this->run_batch(
+		$data                                = $this->run_batch(
 			array(
 				self::item( 'plugin', 'gravityforms/gravityforms.php', '2.9.13' ),
 				self::item( 'plugin', 'wp-rocket/wp-rocket.php', '3.19' ),
@@ -197,7 +197,7 @@ final class BatchUpdateTest extends UpdateSupport {
 			};
 			return $u;
 		};
-		$data = $this->run_batch(
+		$data                                = $this->run_batch(
 			array(
 				self::item( 'plugin', 'gravityforms/gravityforms.php', '2.9.13' ),
 				self::item( 'plugin', 'wp-rocket/wp-rocket.php', '3.19' ),
@@ -209,7 +209,7 @@ final class BatchUpdateTest extends UpdateSupport {
 
 	public function test_busy_site_refuses_the_whole_request(): void {
 		$this->transients['sm_update_lock'] = 'other';
-		$r = SiteManager_Agent::update( $this->post( 'update', array( 'items' => array( self::item( 'plugin', 'hello.php', '1.7.3' ) ) ) ) );
+		$r                                  = SiteManager_Agent::update( $this->post( 'update', array( 'items' => array( self::item( 'plugin', 'hello.php', '1.7.3' ) ) ) ) );
 		$this->assertSame( 'sm_busy', $this->code( $r ) );
 		$this->assertSame( 409, $this->status( $r ) );
 	}

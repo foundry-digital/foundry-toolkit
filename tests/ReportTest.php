@@ -136,7 +136,7 @@ final class ReportTest extends TestCase {
 				if ( SiteManager_Agent::LAST_FATAL_OPT === $key ) {
 					return array(
 						'at'      => '2026-09-22T01:02:03Z',
-						'message' => 'Boom in ' . ABSPATH . 'wp-content/plugins/x.php by jo@example.test',
+						'message' => 'Boom in ' . ABSPATH . 'wp-content/plugins/x.php by jo@example.test: Access denied for user \'shop_db\'@\'10.0.0.5\' (using password: YES)',
 						'file'    => ABSPATH . 'wp-content/plugins/x.php',
 						'line'    => 12,
 					);
@@ -185,7 +185,8 @@ final class ReportTest extends TestCase {
 		// The server's directory layout stays on the server: paths are
 		// relative to the WordPress root, in the file and in the message.
 		$this->assertSame( 'wp-content/plugins/x.php', $r['health']['last_fatal']['file'] );
-		$this->assertSame( 'Boom in wp-content/plugins/x.php by [email]', $r['health']['last_fatal']['message'] );
+		// Nor a database login from MySQL's "Access denied" (ticket 074, L3).
+		$this->assertSame( 'Boom in wp-content/plugins/x.php by [email]: Access denied for user [login] (using password: YES)', $r['health']['last_fatal']['message'] );
 		$this->assertTrue( $r['agent']['updates_enabled'], 'P32: always since 1.16.0' );
 		// Foundry Toolkit (ADR 0025): named for the plugin's main file, and
 		// honest about the loader and hardening, which this test never set up.

@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/foundry-digital/foundry-toolkit
  * Description: Foundry Digital's toolkit for client sites: the Site Manager agent (signed inventory reports and WordPress's own updates on request) and opinionated security hardening.
  * Version: 1.15.0
- * Requires at least: 6.0
+ * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Foundry Digital
  * Author URI: https://foundrydigital.com.au

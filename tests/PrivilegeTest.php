@@ -51,19 +51,19 @@ final class PrivilegeTest extends TestCase {
 	/** @return array<string, array{0: string, 1: bool}> */
 	public function roles(): array {
 		return array(
-			'administrator'                  => array( 'administrator', true ),
-			'editor'                         => array( 'editor', true ),
-			'shop manager'                   => array( 'shop_manager', true ),
+			'administrator'                   => array( 'administrator', true ),
+			'editor'                          => array( 'editor', true ),
+			'shop manager'                    => array( 'shop_manager', true ),
 			'custom role with manage_options' => array( 'site_boss', true ),
-			'author'                         => array( 'author', false ),
-			'subscriber'                     => array( 'subscriber', false ),
-			'shop customer'                  => array( 'customer', false ),
-			'AMA exhibitor'                  => array( 'exhibitor', false ),
-			'AMA gallery'                    => array( 'gallery', false ),
-			'AMA VIP'                        => array( 'vip', false ),
-			'AMA partner'                    => array( 'partner', false ),
-			'AMA art pass'                   => array( 'art-pass', false ),
-			'a role that does not exist'     => array( 'nonsense', false ),
+			'author'                          => array( 'author', false ),
+			'subscriber'                      => array( 'subscriber', false ),
+			'shop customer'                   => array( 'customer', false ),
+			'AMA exhibitor'                   => array( 'exhibitor', false ),
+			'AMA gallery'                     => array( 'gallery', false ),
+			'AMA VIP'                         => array( 'vip', false ),
+			'AMA partner'                     => array( 'partner', false ),
+			'AMA art pass'                    => array( 'art-pass', false ),
+			'a role that does not exist'      => array( 'nonsense', false ),
 		);
 	}
 

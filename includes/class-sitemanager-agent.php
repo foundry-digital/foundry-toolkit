@@ -88,9 +88,8 @@ final class SiteManager_Agent {
 	public static $report_factory = null;
 
 	/**
-	 * Overrides for the plugins directory, the old snapshot stores and the
-	 * opt-in constant. Null means the WordPress value. Tests set them; a
-	 * live site never does, so S2 still rests on the constant.
+	 * The plugins directory, for tests. Null means WP_PLUGIN_DIR; a live
+	 * site never sets it.
 	 *
 	 * @var string|null
 	 */
@@ -339,10 +338,37 @@ final class SiteManager_Agent {
 	 * @return WP_REST_Response
 	 */
 	public static function report() {
-		$response = new WP_REST_Response( self::build_report() );
-		$response->header( 'Cache-Control', 'no-store, no-cache, must-revalidate' );
-		$response->header( 'X-Robots-Tag', 'noindex' );
+		return self::respond( self::build_report(), 'no-store, no-cache, must-revalidate', true );
+	}
+
+	/**
+	 * An answer no cache keeps (P6), and no search engine lists for a read.
+	 *
+	 * @param array<string, mixed> $data          The answer.
+	 * @param string               $cache_control The Cache-Control header.
+	 * @param bool                 $noindex       Whether to add X-Robots-Tag: noindex.
+	 * @return WP_REST_Response
+	 */
+	public static function respond( $data, $cache_control = 'no-store', $noindex = false ) {
+		$response = new WP_REST_Response( $data );
+		$response->header( 'Cache-Control', $cache_control );
+		if ( $noindex ) {
+			$response->header( 'X-Robots-Tag', 'noindex' );
+		}
 		return $response;
+	}
+
+	/**
+	 * Ask PHP for more time. Hosts may disable the function, and calling a
+	 * disabled function is fatal on PHP 8; a refusal is ignored (P36).
+	 *
+	 * @param int $seconds Seconds.
+	 * @return void
+	 */
+	public static function time_limit( $seconds ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			set_time_limit( $seconds );
+		}
 	}
 
 	/**
@@ -742,15 +768,20 @@ final class SiteManager_Agent {
 	}
 
 	/**
-	 * Strip anything that looks like an email address from an error message
-	 * and cap its length, so a fatal error can never carry personal data
-	 * into the report (S6).
+	 * Strip anything that looks like an email address, or a database login
+	 * as MySQL quotes one ('user'@'host'), from an error message and cap its
+	 * length, so a fatal error can never carry personal data or a database
+	 * user into the report (S6, ticket 074).
 	 *
 	 * @param string $message Raw message.
 	 * @return string
 	 */
 	private static function redact( $message ) {
-		$clean = preg_replace( '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', '[email]', $message );
+		$clean = preg_replace(
+			array( "/'[^'\\s]*'@'[^'\\s]*'/", '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/' ),
+			array( '[login]', '[email]' ),
+			$message
+		);
 		if ( null === $clean ) {
 			$clean = '';
 		}
@@ -986,6 +1017,18 @@ final class SiteManager_Agent {
 	}
 
 	/**
+	 * What an upgrader skin collected, cleaned and capped (P39).
+	 *
+	 * @param object $skin The skin.
+	 * @param int    $cap  Most messages kept.
+	 * @return string[]
+	 */
+	private static function skin_messages( $skin, $cap = self::MAX_MESSAGES ) {
+		$raw = method_exists( $skin, 'get_upgrade_messages' ) ? (array) $skin->get_upgrade_messages() : array();
+		return self::clean_messages( array_map( 'strval', $raw ), $cap );
+	}
+
+	/**
 	 * Whether the failure looks like a licence problem (P41).
 	 *
 	 * @param string[] $messages Cleaned messages.
@@ -1127,9 +1170,7 @@ final class SiteManager_Agent {
 			self::load_updater_code();
 			$skin     = new Automatic_Upgrader_Skin();
 			$upgrader = self::upgrader( $type, $skin );
-			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
-				set_time_limit( 300 ); // phpcs:ignore -- P36: ignore failure of this call.
-			}
+			self::time_limit( 300 );
 			if ( 'translation' === $type ) {
 				$result = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( $offer ) : false;
 			} elseif ( 'core' === $type ) {
@@ -1145,8 +1186,7 @@ final class SiteManager_Agent {
 			} else {
 				$result = method_exists( $upgrader, 'upgrade' ) ? $upgrader->upgrade( $item ) : false;
 			}
-			$raw         = method_exists( $skin, 'get_upgrade_messages' ) ? (array) $skin->get_upgrade_messages() : array();
-			$messages    = self::clean_messages( array_map( 'strval', $raw ) );
+			$messages    = self::skin_messages( $skin );
 			$now         = self::installed_version( $type, $item );
 			$reactivated = null !== $state ? self::restore_activation( $item, $state ) : false;
 			if ( $reactivated instanceof WP_Error ) {
@@ -1170,7 +1210,7 @@ final class SiteManager_Agent {
 			}
 			$caches   = 'plugin' === $type ? self::clear_caches( array( $item ) ) : array();
 			$duration = (int) round( ( microtime( true ) - $started ) * 1000 );
-			$response = new WP_REST_Response(
+			return self::respond(
 				array(
 					'ok'           => true,
 					'type'         => $type,
@@ -1183,8 +1223,6 @@ final class SiteManager_Agent {
 					'caches'       => $caches,
 				)
 			);
-			$response->header( 'Cache-Control', 'no-store' );
-			return $response;
 		} finally {
 			self::release_lock();
 		}
@@ -1205,9 +1243,7 @@ final class SiteManager_Agent {
 		if ( false !== get_transient( self::LOCK_TRANSIENT ) ) {
 			return self::fail( 'sm_busy', 'An update is running; check again when it has finished.', 409 );
 		}
-		if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
-			set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
-		}
+		self::time_limit( 120 );
 		if ( class_exists( 'Foundry_Toolkit_Updater' ) ) {
 			Foundry_Toolkit_Updater::forget();
 		}
@@ -1216,16 +1252,14 @@ final class SiteManager_Agent {
 		wp_update_plugins();
 		wp_update_themes();
 		wp_version_check( array(), true );
-		$report   = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
-		$response = new WP_REST_Response(
+		$report = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
+		return self::respond(
 			array(
 				'ok'          => true,
 				'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ),
 				'report'      => $report,
 			)
 		);
-		$response->header( 'Cache-Control', 'no-store' );
-		return $response;
 	}
 
 	/**
@@ -1251,9 +1285,7 @@ final class SiteManager_Agent {
 			return self::fail( 'sm_busy', 'An update is running; clear the caches when it has finished.', 409 );
 		}
 		try {
-			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
-				set_time_limit( 120 ); // phpcs:ignore -- ignore failure of this call.
-			}
+			self::time_limit( 120 );
 			$upgrade = self::settle_rocket();
 			$caches  = self::clear_caches( array() );
 			if ( null !== $upgrade ) {
@@ -1262,15 +1294,13 @@ final class SiteManager_Agent {
 		} finally {
 			self::release_lock();
 		}
-		$response = new WP_REST_Response(
+		return self::respond(
 			array(
 				'ok'          => true,
 				'caches'      => $caches,
 				'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ),
 			)
 		);
-		$response->header( 'Cache-Control', 'no-store' );
-		return $response;
 	}
 
 	/**
@@ -1466,9 +1496,7 @@ final class SiteManager_Agent {
 		try {
 			self::remove_old_stores();
 			self::load_updater_code();
-			if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
-				set_time_limit( 600 ); // phpcs:ignore -- ignore failure of this call.
-			}
+			self::time_limit( 600 );
 			if ( function_exists( 'ignore_user_abort' ) ) { // As above.
 				ignore_user_abort( true );
 			}
@@ -1544,8 +1572,7 @@ final class SiteManager_Agent {
 				$upgrader = self::upgrader( 'plugin', $skin );
 				// The "update now" path: an active plugin stays on (P39a).
 				$out      = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( array_values( $files ) ) : false;
-				$raw      = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
-				$group    = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+				$group    = self::skin_messages( $skin, self::MAX_BATCH_MSGS );
 				$messages = array_merge( $messages, $group );
 				foreach ( $files as $i => $file ) {
 					$r           = is_array( $out ) ? ( $out[ $file ] ?? false ) : $out;
@@ -1568,8 +1595,7 @@ final class SiteManager_Agent {
 				$skin     = new Automatic_Upgrader_Skin();
 				$upgrader = self::upgrader( 'theme', $skin );
 				$out      = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( array_values( $slugs ) ) : false;
-				$raw      = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
-				$group    = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+				$group    = self::skin_messages( $skin, self::MAX_BATCH_MSGS );
 				$messages = array_merge( $messages, $group );
 				foreach ( $slugs as $i => $slug ) {
 					$r             = is_array( $out ) ? ( $out[ $slug ] ?? false ) : $out;
@@ -1585,8 +1611,7 @@ final class SiteManager_Agent {
 					} else {
 						$r = method_exists( $upgrader, 'bulk_upgrade' ) ? $upgrader->bulk_upgrade( $offers[ $i ] ) : false;
 					}
-					$raw           = method_exists( $skin, 'get_upgrade_messages' ) ? array_map( 'strval', (array) $skin->get_upgrade_messages() ) : array();
-					$group         = self::clean_messages( $raw, self::MAX_BATCH_MSGS );
+					$group         = self::skin_messages( $skin, self::MAX_BATCH_MSGS );
 					$messages      = array_merge( $messages, $group );
 					$results[ $i ] = self::group_result( $want[ $i ], $from, $r, $group, false );
 				}
@@ -1595,15 +1620,15 @@ final class SiteManager_Agent {
 			// 3. Caches once, then a fresh report.
 			$caches = array() !== $updated ? self::clear_caches( $updated ) : array();
 			ksort( $results );
-			$results  = array_values( $results );
-			$report   = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
-			$all_ok   = array() === array_filter(
+			$results = array_values( $results );
+			$report  = is_callable( self::$report_factory ) ? call_user_func( self::$report_factory ) : self::build_report();
+			$all_ok  = array() === array_filter(
 				$results,
 				static function ( $r ) {
 					return ! $r['ok'];
 				}
 			);
-			$response = new WP_REST_Response(
+			return self::respond(
 				array(
 					'ok'          => $all_ok,
 					'items'       => $results,
@@ -1613,8 +1638,6 @@ final class SiteManager_Agent {
 					'report'      => $report,
 				)
 			);
-			$response->header( 'Cache-Control', 'no-store' );
-			return $response;
 		} finally {
 			self::release_lock();
 		}

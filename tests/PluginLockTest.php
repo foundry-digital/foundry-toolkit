@@ -29,7 +29,8 @@ final class PluginLockTest extends TestCase {
 		parent::setUp();
 		Monkey\setUp();
 		Functions\when( 'plugin_basename' )->justReturn( self::TOOLKIT );
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		require_once __DIR__ . '/../includes/class-foundry-toolkit-plugin-lock.php';
 	}
 
@@ -103,10 +104,37 @@ final class PluginLockTest extends TestCase {
 	}
 
 	public function test_a_local_site_is_not_locked(): void {
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'local' );
+		Functions\when( 'home_url' )->justReturn( 'http://sandbox.local' );
 		Foundry_Toolkit_Hardening::boot();
 		$this->assertTrue( FOUNDRY_ALLOW_PLUGIN_INSTALLS );
 		$this->assertFalse( has_filter( 'map_meta_cap', array( Foundry_Toolkit_Plugin_Lock::class, 'map_meta_cap' ) ) );
+	}
+
+	/** @return array<string, array{0: string, 1: bool}> */
+	public function addresses(): array {
+		return array(
+			'Local site'                    => array( 'http://sandbox.local', true ),
+			'Local site over HTTPS, a path' => array( 'https://Art-Central.LOCAL/hk', true ),
+			'live site'                     => array( 'https://artcentralhongkong.com', false ),
+			'.local inside a live name'     => array( 'https://shop.local.example.com', false ),
+			'.local in the path, not host'  => array( 'https://example.com/site.local', false ),
+			'no address'                    => array( '', false ),
+		);
+	}
+
+	/**
+	 * A local site is one whose own address (Settings, General, never the
+	 * request's Host header) ends in .local, as every Local site's does
+	 * (James, 2026-10-18). WP_ENVIRONMENT_TYPE no longer decides.
+	 *
+	 * @dataProvider addresses
+	 * @param string $home  The site address.
+	 * @param bool   $local Whether the site is local.
+	 */
+	public function test_local_is_a_dot_local_address( string $home, bool $local ): void {
+		Functions\when( 'home_url' )->justReturn( $home );
+		Functions\when( 'wp_get_environment_type' )->justReturn( 'local' );
+		$this->assertSame( $local, Foundry_Toolkit_Hardening::is_local() );
 	}
 
 	public function test_wp_config_can_turn_it_off(): void {

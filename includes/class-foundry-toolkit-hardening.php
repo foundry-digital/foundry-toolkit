@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * and feeds. Every sharp edge is locked by default and unlocked per site
  * with a FOUNDRY_ALLOW_* constant in wp-config.php (ADR 0037 in the Site
  * Manager repository).
- *  *
+ *
  * Nothing here may break a WooCommerce or Gravity Forms payment (James,
  * 2026-09-24): the tests in HardeningTest guard the parts that could.
  */
@@ -123,15 +123,17 @@ final class Foundry_Toolkit_Hardening {
 	}
 
 	/**
-	 * Whether this is a local development site, from the site's
-	 * WP_ENVIRONMENT_TYPE: request headers are attacker-controlled, so the
-	 * hostname is never used. A site without the constant is production
-	 * and fully locked down, which is the right way to fail.
+	 * Whether this is a Local site on James's Mac: its own address ends in
+	 * .local, as every site Local makes does (James, 2026-10-18). The
+	 * address is the stored Settings, General one from home_url(), never the
+	 * request's Host header, which a visitor chooses. Anything else is a live
+	 * site and fully locked down, which is the right way to fail.
 	 *
 	 * @return bool
 	 */
 	public static function is_local() {
-		return 'local' === wp_get_environment_type();
+		$host = wp_parse_url( home_url(), PHP_URL_HOST );
+		return is_string( $host ) && 1 === preg_match( '/\.local$/i', $host );
 	}
 
 	/**
@@ -165,17 +167,18 @@ final class Foundry_Toolkit_Hardening {
 			// Export, import, the personal-data tools and Site Health
 			// (ADR 0036).
 			'FOUNDRY_ALLOW_TOOLS'             => false,
-			// The site address, admin email, theme, upload path, Additional
-			// CSS and Settings, All Settings (ADR 0036).
+			// The site address, admin email, theme, upload path and
+			// Settings, All Settings (ADR 0036). Additional CSS is never locked.
 			'FOUNDRY_ALLOW_SETTINGS'          => false,
-			// Giving anyone the administrator role, and editing, deleting
-			// or demoting another privileged account (ADR 0036).
+			// Editing, deleting or demoting another privileged account (ADR
+			// 0036). Creating administrators stays open (James, 2026-10-18).
 			'FOUNDRY_ALLOW_ADMIN_CHANGES'     => false,
 			// Privileged accounts (administrators, editors, shop managers,
 			// ticket 071) without an authenticator app are held at the
 			// setup wizard (ADR 0035). Only in an emergency, such as every
-			// administrator locked out.
-			'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA' => false,
+			// administrator locked out. Unlocked on a local site (James,
+			// 2026-10-18).
+			'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA' => self::is_local(),
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {

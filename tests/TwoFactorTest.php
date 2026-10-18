@@ -46,6 +46,8 @@ final class TwoFactorTest extends TestCase {
 		Functions\stubTranslationFunctions();
 		$_GET  = array();
 		$_POST = array();
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'admin_url' )->alias( fn( string $path = '' ) => 'https://example.test/wp-admin/' . $path );
 		Functions\when( 'wp_safe_redirect' )->alias(
 			function ( string $url ): bool {
@@ -222,6 +224,42 @@ final class TwoFactorTest extends TestCase {
 		$this->assertSame( array(), $this->redirects );
 	}
 
+	/**
+	 * Ticket 074, M1: a held user's heartbeat gets through, but runs none of
+	 * its handlers. Core's own hand out a fresh heartbeat nonce and the
+	 * update-post nonce (wp_refresh_nonces), which then let heartbeat_autosave
+	 * overwrite the user's drafts with nothing but a password.
+	 */
+	public function test_a_held_heartbeat_runs_no_handlers(): void {
+		$this->enable();
+		$removed = array();
+		Functions\when( 'remove_all_filters' )->alias(
+			static function ( string $hook ) use ( &$removed ): bool {
+				$removed[] = $hook;
+				return true;
+			}
+		);
+		Functions\when( 'wp_doing_ajax' )->justReturn( true );
+		$_POST['action'] = 'heartbeat';
+
+		// Released: the heartbeat is left as it is.
+		$this->current = new WP_User( 2, 'sam', 'sam@example.test', array( 'administrator' ) );
+		Foundry_Toolkit_Two_Factor::admin_init();
+		$this->assertFalse( has_action( 'wp_ajax_heartbeat', array( Foundry_Toolkit_Two_Factor::class, 'mute_heartbeat' ) ) );
+
+		// Held: muted just before core answers, after every admin_init
+		// callback that might add a handler of its own.
+		$this->current = new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) );
+		Foundry_Toolkit_Two_Factor::admin_init();
+		$this->assertSame( array(), $this->redirects, 'heartbeat gets through' );
+		$this->assertSame( PHP_INT_MIN, has_action( 'wp_ajax_heartbeat', array( Foundry_Toolkit_Two_Factor::class, 'mute_heartbeat' ) ) );
+
+		Foundry_Toolkit_Two_Factor::mute_heartbeat();
+		foreach ( array( 'wp_refresh_nonces', 'heartbeat_received', 'heartbeat_send', 'heartbeat_tick' ) as $hook ) {
+			$this->assertContains( $hook, $removed, $hook );
+		}
+	}
+
 	public function test_the_wizard_itself_is_not_redirected(): void {
 		$this->enable();
 		$this->current = new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) );
@@ -314,7 +352,8 @@ final class TwoFactorTest extends TestCase {
 	}
 
 	public function test_on_by_default_but_holds_nobody_until_the_plugin_is_active(): void {
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();
 		$this->assertFalse( FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA );
@@ -331,11 +370,33 @@ final class TwoFactorTest extends TestCase {
 
 	public function test_switched_off_in_wp_config(): void {
 		define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', true );
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();
 		$this->assertFalse( has_action( 'admin_init' ) );
 		$this->assertFalse( has_filter( 'login_redirect' ) );
+		$this->assertSame(
+			array(
+				'two_factor_required'       => false,
+				'two_factor_plugin_missing' => false,
+			),
+			Foundry_Toolkit_Two_Factor::report_fields()
+		);
+	}
+
+	/**
+	 * A Local site (its address ends in .local) asks nobody for 2FA (James,
+	 * 2026-10-18), with or without the Two Factor plugin.
+	 */
+	public function test_off_on_a_local_site(): void {
+		Functions\when( 'home_url' )->justReturn( 'http://sandbox.local' );
+		Foundry_Toolkit_Hardening::define_toggles();
+		$this->assertTrue( FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA );
+		$this->enable();
+		$this->assertFalse( has_action( 'admin_init' ) );
+		$this->assertFalse( Foundry_Toolkit_Two_Factor::active() );
+		$this->assertFalse( Foundry_Toolkit_Two_Factor::is_held( new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) ) ) );
 		$this->assertSame(
 			array(
 				'two_factor_required'       => false,
