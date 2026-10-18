@@ -307,7 +307,7 @@ final class IntegrityTest extends UpdateSupport {
 		$this->put( 'wp-content/plugins/wp-rocket/assets/logo.png', 'PNG' );
 		$this->put( 'wp-content/themes/hello-child/functions.php', '<?php // child' );
 		$this->themes                     = array( 'hello-child' => '1.0' );
-		Foundry_Toolkit_Integrity::$clock = fn() => 0.0; // no budget pressure here
+		Foundry_Toolkit_Integrity::$clock = fn() => 0.0; // No budget pressure here.
 
 		$first  = Foundry_Toolkit_Integrity::run();
 		$others = array();
@@ -659,8 +659,10 @@ final class IntegrityTest extends UpdateSupport {
 		$this->put( 'wp-content/uploads/2019/04/shell.php', '<?php // dropped' );
 		$this->put( 'wp-content/uploads/2019/05/other.php', '<?php // dropped too' );
 		$this->slow_clock();
-		for ( $calls = 0; $calls < 10 && ! Foundry_Toolkit_Integrity::run()['places']['complete']; $calls++ ) {
-			continue;
+		for ( $calls = 0; $calls < 10; $calls++ ) {
+			if ( Foundry_Toolkit_Integrity::run()['places']['complete'] ) {
+				break;
+			}
 		}
 		unlink( $this->site_root . 'wp-content/uploads/2019/04/shell.php' );
 		$this->expire();

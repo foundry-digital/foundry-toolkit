@@ -22,7 +22,9 @@ final class HostCompatTest extends TestCase {
 	 */
 	private static function sources(): array {
 		$root  = dirname( __DIR__ );
-		$files = array_merge( array( $root . '/foundry-toolkit.php' ), glob( $root . '/includes/*.php' ) ?: array(), glob( $root . '/templates/*.php' ) ?: array() );
+		$inc   = glob( $root . '/includes/*.php' );
+		$tpl   = glob( $root . '/templates/*.php' );
+		$files = array_merge( array( $root . '/foundry-toolkit.php' ), false === $inc ? array() : $inc, false === $tpl ? array() : $tpl );
 		$out   = array();
 		foreach ( $files as $f ) {
 			$out[ $f ] = (string) file_get_contents( $f );

@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * The file integrity check.
+ *
+ * @phpstan-type Result array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[], baseline?: string, fingerprint?: string}
  */
 final class Foundry_Toolkit_Integrity {
 
@@ -193,21 +195,16 @@ final class Foundry_Toolkit_Integrity {
 	 */
 	public static function route( $request ) {
 		unset( $request ); // S14: nothing in the request chooses what is read.
-		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+		if ( self::updating() ) {
 			return new WP_Error( 'sm_busy', 'An update is running; files are changing. Check again when it has finished.', array( 'status' => 409 ) );
 		}
-		if ( function_exists( 'set_time_limit' ) ) { // Hosts may disable it; calling it then is fatal.
-			set_time_limit( 60 ); // phpcs:ignore -- ignore failure of this call.
-		}
+		SiteManager_Agent::time_limit( 60 );
 		$result = self::run();
-		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+		if ( self::updating() ) {
 			// An update began while the files were being read (1.8.0).
 			return new WP_Error( 'sm_busy', 'An update started during the check; files were changing. Check again when it has finished.', array( 'status' => 409 ) );
 		}
-		$response = new WP_REST_Response( $result );
-		$response->header( 'Cache-Control', 'no-store' );
-		$response->header( 'X-Robots-Tag', 'noindex' );
-		return $response;
+		return SiteManager_Agent::respond( $result, 'no-store', true );
 	}
 
 	/**
@@ -220,7 +217,7 @@ final class Foundry_Toolkit_Integrity {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public static function files_route( $request ) {
-		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+		if ( self::updating() ) {
 			return new WP_Error( 'sm_busy', 'An update is running; files are changing. Ask again when it has finished.', array( 'status' => 409 ) );
 		}
 		$result = null;
@@ -230,13 +227,10 @@ final class Foundry_Toolkit_Integrity {
 		if ( null === $result ) {
 			return new WP_Error( 'sm_not_installed', 'No such plugin or theme is installed.', array( 'status' => 404 ) );
 		}
-		if ( false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT ) ) {
+		if ( self::updating() ) {
 			return new WP_Error( 'sm_busy', 'An update started while the files were being read. Ask again when it has finished.', array( 'status' => 409 ) );
 		}
-		$response = new WP_REST_Response( $result );
-		$response->header( 'Cache-Control', 'no-store' );
-		$response->header( 'X-Robots-Tag', 'noindex' );
-		return $response;
+		return SiteManager_Agent::respond( $result, 'no-store', true );
 	}
 
 	/**
@@ -276,6 +270,29 @@ final class Foundry_Toolkit_Integrity {
 			'files'     => (object) array_slice( $files, 0, self::MAX_ITEM_FILES, true ),
 			'truncated' => count( $files ) > self::MAX_ITEM_FILES,
 		);
+	}
+
+	/**
+	 * Whether an update holds the lock (P38), so files may be mid-change.
+	 * Asked again after a check, since an update can start meanwhile.
+	 *
+	 * @phpstan-impure
+	 * @return bool
+	 */
+	private static function updating() {
+		return false !== get_transient( SiteManager_Agent::LOCK_TRANSIENT );
+	}
+
+	/**
+	 * A walked file's path relative to the directory walked, with forward
+	 * slashes.
+	 *
+	 * @param SplFileInfo $file The file.
+	 * @param string      $dir  The directory walked.
+	 * @return string
+	 */
+	private static function path_in( SplFileInfo $file, $dir ) {
+		return ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
 	}
 
 	/**
@@ -389,7 +406,7 @@ final class Foundry_Toolkit_Integrity {
 	 * @return void
 	 */
 	private static function check_other( array &$out, $kind, $slug, $version, $dir, $prefix ) {
-		$result          = self::cached(
+		$result        = self::cached(
 			'sm_integrity_o_' . md5( $kind . '|' . $slug . '|' . $version ),
 			self::PLUGIN_TTL,
 			static function () use ( $kind, $slug, $version, $dir, $prefix ) {
@@ -431,7 +448,8 @@ final class Foundry_Toolkit_Integrity {
 				return $result;
 			}
 		);
-		$out['others'][] = array(
+		$others        = (array) $out['others'];
+		$others[]      = array(
 			'kind'        => $kind,
 			'slug'        => $slug,
 			'version'     => $version,
@@ -439,6 +457,7 @@ final class Foundry_Toolkit_Integrity {
 			'baseline'    => isset( $result['baseline'] ) ? $result['baseline'] : 'recorded',
 			'fingerprint' => isset( $result['fingerprint'] ) ? $result['fingerprint'] : '',
 		);
+		$out['others'] = $others;
 		self::merge( $out, $result );
 	}
 
@@ -463,7 +482,7 @@ final class Foundry_Toolkit_Integrity {
 			if ( 'js' !== $ext && ! self::runs_as_php( $ext ) && '.htaccess' !== $file->getFilename() ) {
 				continue;
 			}
-			$path         = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
+			$path         = self::path_in( $file, $dir );
 			$out[ $path ] = (string) md5_file( $file->getPathname() );
 		}
 		ksort( $out );
@@ -509,7 +528,7 @@ final class Foundry_Toolkit_Integrity {
 	 *
 	 * @param string $version WordPress version.
 	 * @param string $locale  Locale.
-	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
+	 * @return Result
 	 */
 	private static function check_core( $version, $locale ) {
 		$sums   = self::core_sums( $version, $locale );
@@ -655,7 +674,7 @@ final class Foundry_Toolkit_Integrity {
 			if ( ! $f instanceof SplFileInfo || ! $f->isFile() || ! self::runs_as_php( $f->getExtension() ) ) {
 				continue;
 			}
-			$path        = ltrim( str_replace( '\\', '/', substr( $f->getPathname(), strlen( $mu_dir ) ) ), '/' );
+			$path        = self::path_in( $f, $mu_dir );
 			$mu[ $path ] = (string) hash_file( 'sha256', $f->getPathname() );
 			if ( isset( $main[ (string) md5_file( $f->getPathname() ) ] ) ) {
 				$copies[] = self::relative( $f->getPathname() );
@@ -1197,7 +1216,7 @@ final class Foundry_Toolkit_Integrity {
 	 *
 	 * @param string                         $slug Plugin directory.
 	 * @param array<string, string|string[]> $sums Its checksums.
-	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
+	 * @return Result
 	 */
 	private static function check_plugin( $slug, array $sums ) {
 		$result            = self::empty_result();
@@ -1218,11 +1237,12 @@ final class Foundry_Toolkit_Integrity {
 	/**
 	 * Compare one file with its expected sums.
 	 *
-	 * @param array<string, mixed> $result   The result to add to.
-	 * @param string               $base     The directory the file is under, with a trailing slash.
-	 * @param string               $path     The file's path under $base.
-	 * @param string               $reported The path to report, relative to the WordPress root.
-	 * @param string[]             $md5s     The acceptable MD5s.
+	 * @param array    $result   The result to add to.
+	 * @param string   $base     The directory the file is under, with a trailing slash.
+	 * @param string   $path     The file's path under $base.
+	 * @param string   $reported The path to report, relative to the WordPress root.
+	 * @param string[] $md5s     The acceptable MD5s.
+	 * @phpstan-param Result $result
 	 * @return void
 	 */
 	private static function compare( array &$result, $base, $path, $reported, array $md5s ) {
@@ -1265,7 +1285,7 @@ final class Foundry_Toolkit_Integrity {
 		$out = array();
 		foreach ( self::walk( $dir ) as $file ) {
 			if ( $file instanceof SplFileInfo && $file->isFile() && self::runs_as_php( $file->getExtension() ) ) {
-				$out[] = ltrim( str_replace( '\\', '/', substr( $file->getPathname(), strlen( $dir ) ) ), '/' );
+				$out[] = self::path_in( $file, $dir );
 			}
 		}
 		sort( $out );
@@ -1324,7 +1344,7 @@ final class Foundry_Toolkit_Integrity {
 	 * @param string   $key  Transient key.
 	 * @param int      $ttl  Seconds.
 	 * @param callable $make Builds the result.
-	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
+	 * @return Result
 	 */
 	private static function cached( $key, $ttl, $make ) {
 		$hit = self::unseal( get_transient( $key ) );
@@ -1347,14 +1367,14 @@ final class Foundry_Toolkit_Integrity {
 	 */
 	private static function merge( array &$out, array $part ) {
 		foreach ( array( 'modified', 'missing', 'unexpected' ) as $list ) {
-			$out[ $list ] = array_merge( $out[ $list ], $part[ $list ] );
+			$out[ $list ] = array_merge( (array) $out[ $list ], (array) $part[ $list ] );
 		}
 	}
 
 	/**
 	 * A result with nothing found.
 	 *
-	 * @return array{checked: bool, files: int, modified: string[], missing: string[], unexpected: string[]}
+	 * @return Result
 	 */
 	private static function empty_result() {
 		return array(

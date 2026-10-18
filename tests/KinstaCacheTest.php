@@ -56,7 +56,7 @@ final class KinstaCacheTest extends UpdateSupport {
 		parent::setUp();
 		$this->purge                    = new Fake_Kinsta_Purge();
 		$GLOBALS['kinsta_cache']        = (object) array( 'kinsta_cache_purge' => $this->purge );
-		SiteManager_Agent::$cache_tools = null; // the real tools: only Kinsta is installed here
+		SiteManager_Agent::$cache_tools = null; // The real tools: only Kinsta is installed here.
 		Functions\when( 'is_wp_error' )->alias( fn( $v ) => $v instanceof WP_Error );
 		Functions\when( 'wp_remote_retrieve_response_code' )->alias( fn( $r ) => is_array( $r ) ? ( $r['response']['code'] ?? '' ) : '' );
 	}

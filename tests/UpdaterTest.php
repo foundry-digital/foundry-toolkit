@@ -34,8 +34,8 @@ final class UpdaterTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		Monkey\setUp();
-		$this->fixture   = json_decode( (string) file_get_contents( __DIR__ . '/fixtures/protocol/release.json' ), true );
-		$this->zip_bytes = (string) base64_decode( $this->fixture['zip_base64'], true );
+		$this->fixture    = json_decode( (string) file_get_contents( __DIR__ . '/fixtures/protocol/release.json' ), true );
+		$this->zip_bytes  = (string) base64_decode( $this->fixture['zip_base64'], true );
 		$this->transients = array();
 		$this->requested  = array();
 		$this->http       = array(
@@ -86,7 +86,7 @@ final class UpdaterTest extends TestCase {
 		Functions\when( 'download_url' )->alias(
 			function ( string $url ) {
 				$this->requested[] = $url;
-				$path = tempnam( sys_get_temp_dir(), 'ftzip' );
+				$path              = tempnam( sys_get_temp_dir(), 'ftzip' );
 				file_put_contents( $path, $this->zip_bytes );
 				return $path;
 			}
@@ -187,10 +187,11 @@ final class UpdaterTest extends TestCase {
 
 	public function test_refuses_tampered_zip(): void {
 		$this->zip_bytes .= 'backdoor';
-		$r = Foundry_Toolkit_Updater::verify_download( false, self::zip_url( '1.2.0' ), null, array( 'plugin' => self::BASENAME ) );
+		$r                = Foundry_Toolkit_Updater::verify_download( false, self::zip_url( '1.2.0' ), null, array( 'plugin' => self::BASENAME ) );
 		$this->assertInstanceOf( WP_Error::class, $r );
 		$this->assertSame( 'foundry_toolkit_bad_signature', $r->get_error_code() );
-		$this->assertSame( array(), glob( sys_get_temp_dir() . '/ftzip*' ) ?: array(), 'the download is deleted' );
+		$left = glob( sys_get_temp_dir() . '/ftzip*' );
+		$this->assertSame( array(), false === $left ? array() : $left, 'the download is deleted' );
 	}
 
 	public function test_refuses_missing_signature(): void {
@@ -234,7 +235,7 @@ final class UpdaterTest extends TestCase {
 
 		Functions\when( 'is_admin' )->justReturn( true );
 		$_GET['force-check'] = '1';
-		$u = Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
+		$u                   = Foundry_Toolkit_Updater::offer( false, array(), self::BASENAME, array() );
 		unset( $_GET['force-check'] );
 		$this->assertSame( '1.3.1', $u['version'], 'Check again asks GitHub' );
 	}

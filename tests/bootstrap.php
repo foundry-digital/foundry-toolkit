@@ -116,7 +116,9 @@ class WP_REST_Response {
 	/** @var array<string, string> */
 	public $headers = array();
 
-	/** @param mixed $data Data. */
+	/**
+	 * @param mixed $data Data.
+	 */
 	public function __construct( $data = null ) {
 		$this->data = $data;
 	}
@@ -327,7 +329,9 @@ class SM_Test_Paused {
 	/** @var array<string, mixed> */
 	public $all;
 
-	/** @param array<string, mixed> $all Paused items. */
+	/**
+	 * @param array<string, mixed> $all Paused items.
+	 */
 	public function __construct( array $all ) {
 		$this->all = $all;
 	}

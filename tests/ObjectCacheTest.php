@@ -22,7 +22,7 @@ final class ObjectCacheTest extends UpdateSupport {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->flushes                  = 0;
-		SiteManager_Agent::$cache_tools = null; // the real tools: only the object cache is here
+		SiteManager_Agent::$cache_tools = null; // The real tools: only the object cache is here.
 		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 		// Transients live in a persistent object cache, so a flush takes them.
 		Functions\when( 'wp_cache_flush' )->alias(
@@ -57,7 +57,7 @@ final class ObjectCacheTest extends UpdateSupport {
 
 	/** P38, P18: the flush takes neither the update lock nor the used nonce. */
 	public function test_the_lock_and_the_used_nonce_survive_the_flush(): void {
-		$this->transients['sm_update_lock']                   = str_repeat( 'a', 32 );
+		$this->transients['sm_update_lock'] = str_repeat( 'a', 32 );
 		$this->assertTrue( SiteManager_Agent::flush_object_cache() );
 		$this->assertSame( str_repeat( 'a', 32 ), $this->transients['sm_update_lock'] ?? null, 'the lock still holds for the steps that follow' );
 		$this->assertArrayHasKey( 'sm_nonce_' . str_repeat( 'a', 32 ), $this->transients, 'the request cannot be replayed' );

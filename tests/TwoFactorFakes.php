@@ -40,7 +40,9 @@ abstract class Two_Factor_Provider {
 
 /** Email codes: configured for everyone, as in the plugin. */
 class Two_Factor_Email extends Two_Factor_Provider {
-	/** @param WP_User $user User. */
+	/**
+	 * @param WP_User $user User.
+	 */
 	public function is_available_for_user( $user ): bool {
 		return true;
 	}
@@ -56,7 +58,9 @@ class Two_Factor_Totp extends Two_Factor_Provider {
 	/** @var array<int, string> */
 	public static $keys = array();
 
-	/** @param WP_User $user User. */
+	/**
+	 * @param WP_User $user User.
+	 */
 	public function is_available_for_user( $user ): bool {
 		return ! empty( self::$keys[ $user->ID ] );
 	}
@@ -103,7 +107,9 @@ class Two_Factor_Backup_Codes extends Two_Factor_Provider {
 	/** @var array<int, int> */
 	public static $generated = array();
 
-	/** @param WP_User $user User. */
+	/**
+	 * @param WP_User $user User.
+	 */
 	public function is_available_for_user( $user ): bool {
 		return ! empty( self::$generated[ $user->ID ] );
 	}

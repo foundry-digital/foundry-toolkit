@@ -27,7 +27,8 @@ final class LoaderTest extends TestCase {
 	}
 
 	private static function clean(): void {
-		foreach ( glob( WPMU_PLUGIN_DIR . '/{,.}*', GLOB_BRACE ) ?: array() as $f ) {
+		$found = glob( WPMU_PLUGIN_DIR . '/{,.}*', GLOB_BRACE );
+		foreach ( false === $found ? array() : $found as $f ) {
 			if ( is_file( $f ) ) {
 				unlink( $f );
 			}
@@ -42,7 +43,8 @@ final class LoaderTest extends TestCase {
 		$body = (string) file_get_contents( WPMU_PLUGIN_DIR . '/0-foundry-toolkit.php' );
 		$this->assertStringContainsString( "'foundry-toolkit/foundry-toolkit.php'", $body );
 		$this->assertStringContainsString( Foundry_Toolkit_Loader::MARKER, $body );
-		$this->assertSame( array( '0-foundry-toolkit.php' ), array_map( 'basename', glob( WPMU_PLUGIN_DIR . '/{,.}*.php', GLOB_BRACE ) ?: array() ), 'no temporary file left behind' );
+		$php = glob( WPMU_PLUGIN_DIR . '/{,.}*.php', GLOB_BRACE );
+		$this->assertSame( array( '0-foundry-toolkit.php' ), array_map( 'basename', false === $php ? array() : $php ), 'no temporary file left behind' );
 	}
 
 	public function test_loader_is_valid_php(): void {

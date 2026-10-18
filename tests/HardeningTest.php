@@ -33,7 +33,8 @@ final class HardeningTest extends TestCase {
 		parent::setUp();
 		Monkey\setUp();
 		$this->options = array( 'woocommerce_enable_reviews' => 'yes' );
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'get_option' )->alias(
 			function ( string $name, $default = false ) {
 				return $this->options[ $name ] ?? $default;

@@ -60,7 +60,8 @@ final class AdminLockTest extends TestCase {
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'sanitize_key' )->returnArg();
-		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
+		Functions\when( 'home_url' )->justReturn( 'https://example.test' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'plugin_basename' )->justReturn( 'foundry-toolkit/foundry-toolkit.php' );
 		Functions\when( 'get_current_user_id' )->alias( fn() => $this->current );
 		Functions\when( 'get_option' )->alias( fn( string $name, $fallback = false ) => $this->options[ $name ] ?? $fallback );
@@ -178,7 +179,9 @@ final class AdminLockTest extends TestCase {
 	 * only on its own requests, never on core's Tools, Export.
 	 *
 	 * @dataProvider woocommerce_exports
+	 * @param string                $page    The admin page.
 	 * @param array<string, string> $request The query.
+	 * @param bool                  $allowed Whether the export is allowed.
 	 */
 	public function test_woocommerce_product_export_still_works( string $page, array $request, bool $allowed ): void {
 		Functions\when( 'is_admin' )->justReturn( true );
@@ -226,8 +229,11 @@ final class AdminLockTest extends TestCase {
 
 	/**
 	 * @dataProvider option_writes
-	 * @param mixed $old  Stored value.
-	 * @param mixed $new  Value being saved.
+	 * @param string $option Option name.
+	 * @param mixed  $old    Stored value.
+	 * @param mixed  $new    Value being saved.
+	 * @param int    $user   The current user ID.
+	 * @param bool   $saves  Whether the new value is kept.
 	 */
 	public function test_listed_options_keep_their_value_for_a_logged_in_user( string $option, $old, $new, int $user, bool $saves ): void {
 		$this->current = $user;
@@ -282,17 +288,17 @@ final class AdminLockTest extends TestCase {
 		$this->assertSame( '', $this->halt( array( Foundry_Toolkit_Admin_Lock::class, 'refuse_all_settings' ) ) );
 	}
 
-	public function test_the_administrator_role_is_not_offered(): void {
-		Foundry_Toolkit_Admin_Lock::boot( false, false, true );
-		$roles = array(
-			'administrator' => array( 'name' => 'Administrator' ),
-			'site_boss'     => array( 'name' => 'Site boss' ), // A custom role with manage_options.
-			'editor'        => array( 'name' => 'Editor' ),
-			'shop_manager'  => array( 'name' => 'Shop manager' ),
-			'vip'           => array( 'name' => 'VIP' ),
-		);
-		$this->assertSame( array( 'editor', 'shop_manager', 'vip' ), array_keys( Foundry_Toolkit_Admin_Lock::editable_roles( $roles ) ) );
-		$this->assertNotFalse( has_filter( 'editable_roles', array( Foundry_Toolkit_Admin_Lock::class, 'editable_roles' ) ) );
+	/**
+	 * Site administrators still create other administrators (James,
+	 * 2026-10-18): every role picker offers every role, administrator
+	 * included, while FOUNDRY_ALLOW_ADMIN_CHANGES is locked.
+	 */
+	public function test_every_role_is_offered(): void {
+		Foundry_Toolkit_Admin_Lock::boot( true, true, true );
+		$this->assertFalse( has_filter( 'editable_roles' ) );
+		$this->assertFalse( has_filter( 'update_user_metadata' ) );
+		$this->assertFalse( has_filter( 'add_user_metadata' ) );
+		$this->assertFalse( has_filter( 'pre_update_option' ) );
 	}
 
 	/** @return array<string, array{0: string, 1: array<string, string>, 2: array<string, string>}> */
@@ -308,16 +314,17 @@ final class AdminLockTest extends TestCase {
 
 	/**
 	 * @dataProvider admin_role_requests
+	 * @param string                $page    The admin page.
 	 * @param array<string, string> $post    The form.
 	 * @param array<string, string> $request The query string.
 	 */
-	public function test_giving_the_administrator_role_is_refused( string $page, array $post, array $request ): void {
+	public function test_giving_the_administrator_role_is_allowed( string $page, array $post, array $request ): void {
 		Foundry_Toolkit_Admin_Lock::boot( false, false, true );
 		$_POST    = $post;
 		$_GET     = $request;
 		$_REQUEST = $request + $post;
 		$this->assertNotFalse( has_action( 'load-' . $page, array( Foundry_Toolkit_Admin_Lock::class, 'refuse_user_screen' ) ) );
-		$this->assertStringContainsString( 'FOUNDRY_ALLOW_ADMIN_CHANGES', $this->halt( array( Foundry_Toolkit_Admin_Lock::class, 'refuse_user_screen' ) ) );
+		$this->assertSame( '', $this->halt( array( Foundry_Toolkit_Admin_Lock::class, 'refuse_user_screen' ) ) );
 	}
 
 	public function test_portal_roles_and_the_admin_filter_view_go_through(): void {
@@ -382,45 +389,6 @@ final class AdminLockTest extends TestCase {
 		}
 	}
 
-	/** @return array<string, array{0: int, 1: mixed, 2: mixed, 3: bool}> */
-	public function role_meta_writes(): array {
-		return array(
-			'made administrator'            => array( self::ADMIN, array( 'vip' => true ), array( 'administrator' => true ), false ),
-			'new user as administrator'     => array( self::ADMIN, '', array( 'administrator' => true ), false ),
-			'already administrator'         => array( self::ADMIN, array( 'administrator' => true ), array( 'administrator' => true ), true ),
-			'portal role'                   => array( self::ADMIN, array( 'subscriber' => true ), array( 'vip' => true ), true ),
-			'custom admin role'             => array( self::ADMIN, array( 'vip' => true ), array( 'site_boss' => true ), false ),
-			'manage_options given directly' => array(
-				self::ADMIN,
-				array( 'vip' => true ),
-				array(
-					'vip'            => true,
-					'manage_options' => true,
-				),
-				false,
-			),
-			'editor'                        => array( self::ADMIN, array( 'author' => true ), array( 'editor' => true ), true ),
-			'WP-CLI with no user'           => array( 0, array( 'vip' => true ), array( 'administrator' => true ), true ),
-		);
-	}
-
-	/**
-	 * The backstop for a plugin that sets a role in its own code.
-	 *
-	 * @dataProvider role_meta_writes
-	 * @param mixed $old Stored capabilities.
-	 * @param mixed $new Capabilities being saved.
-	 */
-	public function test_the_administrator_role_cannot_be_written_another_way( int $user, $old, $new, bool $saves ): void {
-		$this->current                = $user;
-		$this->caps_meta[ self::VIP ] = $old;
-		Foundry_Toolkit_Admin_Lock::boot( false, false, true );
-		$got = Foundry_Toolkit_Admin_Lock::refuse_admin_role_meta( null, self::VIP, 'wp_capabilities', $new );
-		$this->assertSame( $saves ? null : false, $got );
-		// Any other user meta goes through untouched.
-		$this->assertNull( Foundry_Toolkit_Admin_Lock::refuse_admin_role_meta( null, self::VIP, 'nickname', array( 'administrator' => true ) ) );
-	}
-
 	public function test_a_held_accounts_password_and_email_stay_when_another_user_saves_it(): void {
 		Foundry_Toolkit_Admin_Lock::boot( false, false, true );
 		$data = array(
@@ -471,7 +439,7 @@ final class AdminLockTest extends TestCase {
 		$this->assertTrue( $this->refused( 'switch_themes' ) );
 		$this->assertTrue( $this->refused( 'edit_user', array( self::OTHER_ADMIN ) ) );
 		$this->assertNotFalse( has_filter( 'pre_update_option_siteurl', array( Foundry_Toolkit_Admin_Lock::class, 'keep_option' ) ) );
-		$this->assertNotFalse( has_filter( 'editable_roles', array( Foundry_Toolkit_Admin_Lock::class, 'editable_roles' ) ) );
+		$this->assertNotFalse( has_filter( 'wp_pre_insert_user_data', array( Foundry_Toolkit_Admin_Lock::class, 'keep_held_login' ) ) );
 	}
 
 	public function test_wp_config_unlocks_each_group(): void {
@@ -480,7 +448,7 @@ final class AdminLockTest extends TestCase {
 		define( 'FOUNDRY_ALLOW_ADMIN_CHANGES', true );
 		Foundry_Toolkit_Hardening::boot();
 		$this->assertFalse( has_filter( 'pre_update_option_siteurl', array( Foundry_Toolkit_Admin_Lock::class, 'keep_option' ) ) );
-		$this->assertFalse( has_filter( 'editable_roles', array( Foundry_Toolkit_Admin_Lock::class, 'editable_roles' ) ) );
+		$this->assertFalse( has_filter( 'wp_pre_insert_user_data', array( Foundry_Toolkit_Admin_Lock::class, 'keep_held_login' ) ) );
 		$this->assertFalse( has_filter( 'map_meta_cap', array( Foundry_Toolkit_Admin_Lock::class, 'map_meta_cap' ) ) );
 	}
 
@@ -495,6 +463,6 @@ final class AdminLockTest extends TestCase {
 		Foundry_Toolkit_Hardening::boot();
 		$this->assertTrue( $this->refused( 'export' ) );
 		$this->assertFalse( $this->refused( 'edit_user', array( self::OTHER_ADMIN ) ) );
-		$this->assertFalse( has_filter( 'editable_roles', array( Foundry_Toolkit_Admin_Lock::class, 'editable_roles' ) ) );
+		$this->assertFalse( has_filter( 'wp_pre_insert_user_data', array( Foundry_Toolkit_Admin_Lock::class, 'keep_held_login' ) ) );
 	}
 }

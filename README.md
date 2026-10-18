@@ -19,17 +19,19 @@ Everything is locked by default. Each switch unlocks one thing: add `define( 'FO
 
 | Constant | Unlocks |
 | --- | --- |
-| `FOUNDRY_ALLOW_PLUGIN_INSTALLS` | Adding, uploading, deleting and editing plugins and themes, and deactivating Foundry Toolkit (1.12.0). Unlocked by default on a local site. Updating works either way: the Update buttons, WordPress's automatic updates and Site Manager's. |
+| `FOUNDRY_ALLOW_PLUGIN_INSTALLS` | Adding, uploading, deleting and editing plugins and themes, and deactivating Foundry Toolkit (1.12.0). Unlocked by default on a local site (below). Updating works either way: the Update buttons, WordPress's automatic updates and Site Manager's. |
 | `FOUNDRY_ALLOW_TOOLS` | Tools, Export and Import, the personal-data export and erase tools, and Site Health (1.16.0). WooCommerce's Products, Export keeps working either way. |
 | `FOUNDRY_ALLOW_SETTINGS` | Changing the site address, admin email, theme or upload path; Settings, All Settings (1.16.0). Additional CSS, in the Customizer, the Site Editor or a block, is never locked. |
-| `FOUNDRY_ALLOW_ADMIN_CHANGES` | Giving anyone the Administrator role, and editing, deleting or changing the role of another privileged account (1.16.0). |
+| `FOUNDRY_ALLOW_ADMIN_CHANGES` | Editing, resetting the password of, deleting or changing the role of another privileged account (1.16.0). Creating administrators is never locked. |
 | `FOUNDRY_ALLOW_REGISTRATION` | Visitors registering through `wp-login.php`. WooCommerce and Gravity Forms create accounts themselves and are unaffected either way. Locked or not, the default role is never one that can do a held capability: an administrator, editor or shop manager default reads as subscriber (1.15.0). |
 | `FOUNDRY_ALLOW_XMLRPC` | XML-RPC beyond Jetpack, such as the WordPress mobile app. While Jetpack is connected, its own methods get through anyway. |
 | `FOUNDRY_ALLOW_COMMENTS` | Comments. WooCommerce product reviews stay while reviews are on in WooCommerce. |
 | `FOUNDRY_ALLOW_FEEDS` | The RSS feeds, for anything that reads them (Mailchimp RSS campaigns, podcasts). |
 | `FOUNDRY_ALLOW_APP_PASSWORDS` | Application passwords, for an integration that signs in to the REST API with one. |
-| `FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA` | Only in an emergency, such as every administrator locked out: privileged accounts no longer have to set up an authenticator app (below). |
+| `FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA` | Only in an emergency, such as every administrator locked out: privileged accounts no longer have to set up an authenticator app (below). Unlocked by default on a local site. |
 | `FOUNDRY_ALLOW_PRERELEASES` | On a test site only: be offered pre-releases such as `1.3.0-rc1`. |
+
+A **local site** is one whose site address (Settings, General) ends in `.local`, as every site Local makes does. Its address is read from WordPress's settings, never from the request, so a visitor cannot make a live site look local. A local site can add plugins and skips 2FA without any line in `wp-config.php`; everything else stays locked.
 
 A site deployed only by git can define WordPress's own `DISALLOW_FILE_MODS`, which also removes updates, Site Manager's included.
 
@@ -39,10 +41,10 @@ Before 1.16.0 the switches were `FDHARDEN_*` (each pointing its own way) and Sit
 
 After the Sydney Contemporary hack (a client administrator's leaked password), the tools and settings such a login would use, and our sites don't need day to day, are locked for everyone, administrators included (ADR 0036). What still works: every normal Settings page (the site title saves; the address and admin email keep their value, with a notice naming `FOUNDRY_ALLOW_SETTINGS`), menus, widgets and the Customizer, editing your own profile, creating and editing portal users, subscribers, authors and customers, Gravity Forms entry export, Elementor, and updates.
 
-- **Administrators.** No role picker offers Administrator, or any other role with administrator-level powers (editors and shop managers can still be created). Opening, editing, resetting the password of, deleting or demoting another privileged account (another administrator, an editor, a shop manager, or any role with administrator-level powers) is refused with a message naming `FOUNDRY_ALLOW_ADMIN_CHANGES`. As a backstop for plugins with their own user screens or imports, a logged-in request can never give an account an administrator-level role or capability, or change another privileged account's password or email.
+- **Administrators.** Site administrators can still create administrators, and give any role to a new user or to a user who is not privileged. Opening, editing, resetting the password of, deleting or changing the role of another privileged account (another administrator, an editor, a shop manager, or any role with administrator-level powers) is refused with a message naming `FOUNDRY_ALLOW_ADMIN_CHANGES`; so is promoting an existing editor or shop manager, since that changes another privileged account's role. As a backstop for plugins with their own user screens or imports, a logged-in request can never change another privileged account's password or email. Every new privileged account raises an alert in Site Manager (ticket 071).
 - **Never removed:** the administrator-level capabilities themselves (`manage_options` and the rest of ticket 071's list), so the 2FA hold, the privileged-account count and AMA Portals behave as before.
 - **Only for a logged-in user.** WP-CLI without `--user`, cron, WordPress's own writes and Site Manager's signed requests are untouched. So `wp user create jo jo@example.com --role=administrator`, `wp option update admin_email …`, `wp theme activate …` and `wp export` work while everything is locked.
-- **Known limit:** someone with file access to the server (SFTP, a backdoor) can add a switch. The locks stop what a stolen password can do, not code already on the server.
+- **Known limits:** on multisite, a super admin can still change a site's domain, the network admin email and who is a super admin. Someone with file access to the server (SFTP, a backdoor) can add a switch. The locks stop what a stolen password can do, not code already on the server.
 
 ## Required 2FA for privileged accounts
 
@@ -51,7 +53,8 @@ On every site with the WordPress.org [Two Factor](https://wordpress.org/plugins/
 - On by default. Installing the Two Factor plugin is what switches it on for a site, so reset the administrators' and editors' passwords first: a password leaked earlier could otherwise enrol the attacker's phone.
 - Only the plugin's authenticator app (TOTP) counts. Email codes do not.
 - Decided by capability, not role name (ticket 071): anyone who can `manage_options`, `promote_users`, `edit_users`, `create_users`, `delete_users`, `activate_plugins` or `edit_others_posts`, and super admins. That is administrators, editors and shop managers, plus any role given one of those. No exemptions, a host's support account included. Customers, members and portal roles (subscriber capabilities) are never touched. Nor are WP-CLI and cron.
-- While someone is held, only the wizard, logging out, the plugin's own REST routes (`two-factor/1.0`) and the Heartbeat get through. Any other REST request is refused with a 403.
+- While someone is held, only the wizard, logging out, the plugin's own REST routes (`two-factor/1.0`) and the Heartbeat get through. The Heartbeat answers with the time alone: none of its handlers runs, so it hands out no fresh nonces and saves no autosaves. Any other REST request is refused with a 403.
+- Off on a local site (above), where nobody is held and the report says 2FA is not required.
 - Without the plugin, nobody is held, and the Site Manager report says so (`users.two_factor_plugin_missing`).
 
 Getting back in: a backup code at login after a lost phone; `wp user meta delete <id> _two_factor_enabled_providers` with WP-CLI; or another administrator resetting the user's 2FA on their profile, which needs `FOUNDRY_ALLOW_ADMIN_CHANGES` for a moment, since editing another administrator is locked (1.16.0). With everyone locked out, `define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', true );` in `wp-config.php`.
@@ -84,7 +87,7 @@ It needs `ssh sitemanager` to work (the same alias Site Manager's `make deploy` 
 make check
 ```
 
-Runs PHP_CodeSniffer (WordPress ruleset), PHPStan level 8 with PHP 7.4 semantics and PHPUnit with Brain Monkey. No WordPress install is needed. `TESTING.md` is the one test against a real site.
+Runs PHP_CodeSniffer with the WordPress ruleset and PHPCompatibilityWP (PHP 7.4 and later) over the plugin and its tests (`phpcs.xml` lists the few rules the tests skip, and why), PHPStan at level `max` with PHP 7.4 semantics, and PHPUnit with Brain Monkey. No WordPress install is needed. `TESTING.md` is the one test against a real site.
 
 `tests/fixtures/protocol/` is a copy of `testdata/protocol/` in the Site Manager repository, which is the source of truth; Site Manager's `make check` fails if the two differ.
 

@@ -110,14 +110,14 @@ final class Foundry_Toolkit_Updater {
 	 * @return array{version: string, package: string, url: string, notes: string}|null
 	 */
 	public static function usable( array $item ) {
-		if ( ! empty( $item['draft'] ) || ! isset( $item['tag_name'] ) || ! preg_match( '/^v(' . self::VERSION_PATTERN . ')$/', (string) $item['tag_name'], $m ) ) {
+		if ( ! empty( $item['draft'] ) || ! isset( $item['tag_name'] ) || ! is_string( $item['tag_name'] ) || ! preg_match( '/^v(' . self::VERSION_PATTERN . ')$/', $item['tag_name'], $m ) ) {
 			return null;
 		}
 		$want = self::DOWNLOAD_PREFIX . 'v' . $m[1] . '/foundry-toolkit.zip';
 		$urls = array();
 		foreach ( isset( $item['assets'] ) && is_array( $item['assets'] ) ? $item['assets'] : array() as $a ) {
-			if ( is_array( $a ) && isset( $a['browser_download_url'] ) ) {
-				$urls[] = (string) $a['browser_download_url'];
+			if ( is_array( $a ) && isset( $a['browser_download_url'] ) && is_string( $a['browser_download_url'] ) ) {
+				$urls[] = $a['browser_download_url'];
 			}
 		}
 		if ( ! in_array( $want, $urls, true ) || ! in_array( $want . '.sig', $urls, true ) ) {
@@ -126,8 +126,8 @@ final class Foundry_Toolkit_Updater {
 		return array(
 			'version' => $m[1],
 			'package' => $want,
-			'url'     => isset( $item['html_url'] ) ? (string) $item['html_url'] : 'https://github.com/foundry-digital/foundry-toolkit/releases',
-			'notes'   => isset( $item['body'] ) ? (string) $item['body'] : '',
+			'url'     => isset( $item['html_url'] ) && is_string( $item['html_url'] ) ? $item['html_url'] : 'https://github.com/foundry-digital/foundry-toolkit/releases',
+			'notes'   => isset( $item['body'] ) && is_string( $item['body'] ) ? $item['body'] : '',
 		);
 	}
 
@@ -223,8 +223,8 @@ final class Foundry_Toolkit_Updater {
 		if ( is_wp_error( $file ) ) {
 			return $file;
 		}
-		$zip = (string) file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions -- the downloaded temporary file.
-		if ( ! self::signature_ok( $version, $zip, (string) wp_remote_retrieve_body( $sig ) ) ) {
+		$sha256 = hash_file( 'sha256', $file );
+		if ( false === $sha256 || ! self::signature_verifies( $version, $sha256, (string) wp_remote_retrieve_body( $sig ) ) ) {
 			wp_delete_file( $file );
 			return new WP_Error( 'foundry_toolkit_bad_signature', __( 'The Foundry Toolkit release is not signed by Site Manager, so it was not installed.', 'foundry-toolkit' ) );
 		}
@@ -240,11 +240,24 @@ final class Foundry_Toolkit_Updater {
 	 * @return bool
 	 */
 	public static function signature_ok( $version, $zip, $sigs ) {
+		return self::signature_verifies( $version, hash( 'sha256', $zip ), $sigs );
+	}
+
+	/**
+	 * Whether any line of the signature file verifies, given the zip's
+	 * SHA-256, so the download is hashed from disk, not read into memory.
+	 *
+	 * @param string $version Version from the release URL.
+	 * @param string $sha256  The zip's SHA-256, lower-case hex.
+	 * @param string $sigs    Signature file: one base64 signature per line.
+	 * @return bool
+	 */
+	public static function signature_verifies( $version, $sha256, $sigs ) {
 		$key = base64_decode( (string) constant( 'SITEMANAGER_PUBLIC_KEY' ), true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- decoding the key, not code.
 		if ( false === $key || SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES !== strlen( $key ) ) {
 			return false;
 		}
-		$message = "foundry-toolkit\n" . $version . "\n" . hash( 'sha256', $zip );
+		$message = "foundry-toolkit\n" . $version . "\n" . $sha256;
 		$lines   = preg_split( '/\r?\n/', trim( $sigs ) );
 		foreach ( false === $lines ? array() : $lines as $line ) {
 			$sig = base64_decode( trim( $line ), true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- a signature.

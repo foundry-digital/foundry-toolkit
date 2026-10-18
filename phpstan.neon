@@ -1,8 +1,8 @@
-# PHPStan at level 8 with the WordPress stubs and PHP 7.4 semantics.
+# PHPStan at level max with the WordPress stubs and PHP 7.4 semantics.
 includes:
     - vendor/szepeviktor/phpstan-wordpress/extension.neon
 parameters:
-    level: 8
+    level: max
     phpVersion: 70400
     paths:
         - foundry-toolkit.php
