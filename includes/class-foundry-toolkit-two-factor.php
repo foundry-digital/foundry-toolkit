@@ -13,7 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Holds every privileged account (Foundry_Toolkit_Privilege::HELD_CAPS)
  * without an authenticator app at a setup wizard until they set one up. On
- * by default; FDHARDEN_REQUIRE_2FA false in wp-config.php switches it off.
+ * by default; FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA true in wp-config.php switches
+ * it off.
  * The 2FA itself is the WordPress.org Two Factor plugin's: this class never
  * stores a secret or checks a code, it calls the plugin's TOTP provider and
  * backup codes.
@@ -73,13 +74,13 @@ final class Foundry_Toolkit_Two_Factor {
 	}
 
 	/**
-	 * Whether 2FA is asked for: on unless wp-config.php sets the constant
-	 * false.
+	 * Whether 2FA is asked for: on unless wp-config.php defines
+	 * FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA as true.
 	 *
 	 * @return bool
 	 */
 	private static function required() {
-		return defined( 'FDHARDEN_REQUIRE_2FA' ) && (bool) FDHARDEN_REQUIRE_2FA;
+		return ! ( defined( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA' ) && true === FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA );
 	}
 
 	/**

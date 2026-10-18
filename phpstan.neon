@@ -14,15 +14,16 @@ parameters:
     treatPhpDocTypesAsCertain: false
     # wp-config.php decides these per site; the stub values are only defaults.
     dynamicConstantNames:
-        - FDHARDEN_IS_LOCAL
-        - FDHARDEN_DISALLOW_FILE_MODS
-        - FDHARDEN_DISABLE_XMLRPC
-        - FDHARDEN_DISABLE_COMMENTS
-        - FDHARDEN_DISABLE_FEEDS
-        - FDHARDEN_DISABLE_APP_PASSWORDS
-        - FDHARDEN_LOCK_REGISTRATION
-        - FDHARDEN_LOCK_PLUGINS
-        - FDHARDEN_REQUIRE_2FA
+        - FOUNDRY_ALLOW_XMLRPC
+        - FOUNDRY_ALLOW_COMMENTS
+        - FOUNDRY_ALLOW_FEEDS
+        - FOUNDRY_ALLOW_APP_PASSWORDS
+        - FOUNDRY_ALLOW_REGISTRATION
+        - FOUNDRY_ALLOW_PLUGIN_INSTALLS
+        - FOUNDRY_ALLOW_TOOLS
+        - FOUNDRY_ALLOW_SETTINGS
+        - FOUNDRY_ALLOW_ADMIN_CHANGES
+        - FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA
+        - FOUNDRY_ALLOW_PRERELEASES
         # Defined by whichever copy loads first: ours or an old must-use agent.
         - SITEMANAGER_AGENT_VERSION
-        - FOUNDRY_TOOLKIT_PRERELEASES

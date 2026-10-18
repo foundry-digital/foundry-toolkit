@@ -12,9 +12,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Opinionated hardening: XML-RPC, comments, file editors, author enumeration,
  * anonymous user endpoints, security headers, SSL for admin, emojis, oEmbed
- * and feeds. Every sharp edge is opt-out per site with the FDHARDEN_*
- * constants in wp-config.php, the same names as the old must-use plugin.
- *
+ * and feeds. Every sharp edge is locked by default and unlocked per site
+ * with a FOUNDRY_ALLOW_* constant in wp-config.php (ADR 0037 in the Site
+ * Manager repository).
+ *  *
  * Nothing here may break a WooCommerce or Gravity Forms payment (James,
  * 2026-09-24): the tests in HardeningTest guard the parts that could.
  */
@@ -83,19 +84,19 @@ final class Foundry_Toolkit_Hardening {
 		self::file_editors();
 		self::ssl();
 		self::xmlrpc();
-		if ( FDHARDEN_DISABLE_COMMENTS ) {
+		if ( true !== FOUNDRY_ALLOW_COMMENTS ) {
 			self::comments();
 		}
 		add_action( 'init', array( __CLASS__, 'block_author_enumeration' ) );
 		add_filter( 'rest_endpoints', array( __CLASS__, 'hide_anon_rest_routes' ) );
 		add_action( 'init', array( __CLASS__, 'remove_emoji_and_oembed' ) );
-		if ( FDHARDEN_DISABLE_FEEDS ) {
+		if ( true !== FOUNDRY_ALLOW_FEEDS ) {
 			foreach ( array( 'do_feed', 'do_feed_rdf', 'do_feed_rss', 'do_feed_rss2', 'do_feed_atom' ) as $hook ) {
 				add_action( $hook, array( __CLASS__, 'no_feed' ), 1 );
 			}
 		}
 		add_action( 'send_headers', array( __CLASS__, 'send_security_headers' ) );
-		if ( FDHARDEN_DISABLE_APP_PASSWORDS ) {
+		if ( true !== FOUNDRY_ALLOW_APP_PASSWORDS ) {
 			add_filter( 'wp_is_application_passwords_available', '__return_false' );
 		}
 		add_filter( 'wp_login_errors', array( __CLASS__, 'capture_login_errors' ), 999 );
@@ -103,84 +104,96 @@ final class Foundry_Toolkit_Hardening {
 		add_filter( 'login_errors', array( __CLASS__, 'generic_login_error' ) );
 		remove_action( 'wp_head', 'wp_generator' );
 		add_filter( 'the_generator', '__return_empty_string' );
-		if ( FDHARDEN_LOCK_REGISTRATION ) {
+		if ( true !== FOUNDRY_ALLOW_REGISTRATION ) {
 			add_filter( 'pre_option_users_can_register', '__return_zero' );
 			add_filter( 'pre_option_default_role', array( __CLASS__, 'subscriber' ) );
 		}
 		// With the lock off too: a site that lets visitors register can still
 		// never hand them a held role (ticket 071).
 		add_filter( 'option_default_role', array( __CLASS__, 'safe_default_role' ) );
-		if ( FDHARDEN_LOCK_PLUGINS ) {
+		if ( true !== FOUNDRY_ALLOW_PLUGIN_INSTALLS ) {
 			require_once __DIR__ . '/class-foundry-toolkit-plugin-lock.php';
 			Foundry_Toolkit_Plugin_Lock::boot();
+		}
+		if ( true !== FOUNDRY_ALLOW_TOOLS || true !== FOUNDRY_ALLOW_SETTINGS || true !== FOUNDRY_ALLOW_ADMIN_CHANGES ) {
+			require_once __DIR__ . '/class-foundry-toolkit-admin-lock.php';
+			Foundry_Toolkit_Admin_Lock::boot( true !== FOUNDRY_ALLOW_TOOLS, true !== FOUNDRY_ALLOW_SETTINGS, true !== FOUNDRY_ALLOW_ADMIN_CHANGES );
 		}
 		self::$booted = true;
 	}
 
 	/**
-	 * Section 0: toggles. Define any of these in wp-config.php to opt a site
-	 * out. "Local" means wp_get_environment_type() is 'local', from the
-	 * site's WP_ENVIRONMENT_TYPE: request headers are attacker-controlled, so
-	 * the hostname is never used. A site without the constant is production
+	 * Whether this is a local development site, from the site's
+	 * WP_ENVIRONMENT_TYPE: request headers are attacker-controlled, so the
+	 * hostname is never used. A site without the constant is production
 	 * and fully locked down, which is the right way to fail.
+	 *
+	 * @return bool
+	 */
+	public static function is_local() {
+		return 'local' === wp_get_environment_type();
+	}
+
+	/**
+	 * Section 0: the switches. Each is locked unless wp-config.php defines
+	 * it as exactly true (a string such as 'false' unlocks nothing); to do one of these things, define it for a moment, then
+	 * take the line out (ADR 0037).
 	 *
 	 * @return void
 	 */
 	public static function define_toggles() {
-		if ( ! defined( 'FDHARDEN_IS_LOCAL' ) ) {
-			define( 'FDHARDEN_IS_LOCAL', 'local' === wp_get_environment_type() );
-		}
 		$defaults = array(
-			// The wider lock: also removes the installer, update buttons and
-			// auto-updates, and so blocks Site Manager's updates. Only for a
-			// site deployed exclusively by git.
-			'FDHARDEN_DISALLOW_FILE_MODS'    => false,
-			// Off if the site needs XML-RPC beyond Jetpack (the WordPress
-			// mobile app, legacy publishing tools).
-			'FDHARDEN_DISABLE_XMLRPC'        => true,
-			// Off on a site that runs comments. WooCommerce product reviews
-			// are kept either way while reviews are on in WooCommerce.
-			'FDHARDEN_DISABLE_COMMENTS'      => true,
-			// Off if anything reads the site's RSS (Mailchimp RSS campaigns,
+			// The WordPress mobile app or legacy publishing tools. While
+			// Jetpack is connected, its own methods get through anyway.
+			'FOUNDRY_ALLOW_XMLRPC'            => false,
+			// A site that runs comments. WooCommerce product reviews are
+			// kept either way while reviews are on in WooCommerce.
+			'FOUNDRY_ALLOW_COMMENTS'          => false,
+			// Anything that reads the site's RSS (Mailchimp RSS campaigns,
 			// podcasts, aggregators).
-			'FDHARDEN_DISABLE_FEEDS'         => true,
-			// Off if an integration signs in to the REST API with an
+			'FOUNDRY_ALLOW_FEEDS'             => false,
+			// An integration that signs in to the REST API with an
 			// application password.
-			'FDHARDEN_DISABLE_APP_PASSWORDS' => true,
-			// Off on a site where visitors register through wp-login.php.
-			// WooCommerce and Gravity Forms create accounts themselves and
-			// are unaffected either way.
-			'FDHARDEN_LOCK_REGISTRATION'     => true,
-			// Off for a moment to add a plugin or theme: while it is on,
-			// nobody can add, upload, delete or edit them, or deactivate
-			// this plugin. Updates keep working (1.12.0). Off on a local site.
-			'FDHARDEN_LOCK_PLUGINS'          => ! FDHARDEN_IS_LOCAL,
-			// Holds every privileged account (administrators, editors,
-			// shop managers, ticket 071) without an authenticator app at
-			// the setup wizard (ADR 0035). Needs the Two Factor plugin:
-			// without it nobody is held. Off only in an emergency, such as
-			// every administrator locked out.
-			'FDHARDEN_REQUIRE_2FA'           => true,
+			'FOUNDRY_ALLOW_APP_PASSWORDS'     => false,
+			// Visitors who register through wp-login.php. WooCommerce and
+			// Gravity Forms create accounts themselves and are unaffected.
+			'FOUNDRY_ALLOW_REGISTRATION'      => false,
+			// Adding, uploading, deleting or editing plugins and themes, and
+			// deactivating this plugin. Updates work either way (1.12.0).
+			// Unlocked on a local site.
+			'FOUNDRY_ALLOW_PLUGIN_INSTALLS'   => self::is_local(),
+			// Export, import, the personal-data tools and Site Health
+			// (ADR 0036).
+			'FOUNDRY_ALLOW_TOOLS'             => false,
+			// The site address, admin email, theme, upload path, Additional
+			// CSS and Settings, All Settings (ADR 0036).
+			'FOUNDRY_ALLOW_SETTINGS'          => false,
+			// Giving anyone the administrator role, and editing, deleting
+			// or demoting another privileged account (ADR 0036).
+			'FOUNDRY_ALLOW_ADMIN_CHANGES'     => false,
+			// Privileged accounts (administrators, editors, shop managers,
+			// ticket 071) without an authenticator app are held at the
+			// setup wizard (ADR 0035). Only in an emergency, such as every
+			// administrator locked out.
+			'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA' => false,
 		);
 		foreach ( $defaults as $name => $value ) {
 			if ( ! defined( $name ) ) {
-				define( $name, $value ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- the names are FDHARDEN_*.
+				define( $name, $value ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- the names are FOUNDRY_*.
 			}
 		}
 	}
 
 	/**
 	 * Section 1: no theme or plugin file editors, on every site. Installing,
-	 * updating and activating plugins keep working.
+	 * updating and activating plugins keep working. A site deployed only by
+	 * git defines WordPress's own DISALLOW_FILE_MODS in wp-config.php.
 	 *
 	 * @return void
 	 */
 	public static function file_editors() {
 		if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
 			define( 'DISALLOW_FILE_EDIT', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- WordPress's own constant, the point of this section.
-		}
-		if ( FDHARDEN_DISALLOW_FILE_MODS && ! defined( 'DISALLOW_FILE_MODS' ) ) {
-			define( 'DISALLOW_FILE_MODS', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals -- as above.
 		}
 	}
 
@@ -195,10 +208,10 @@ final class Foundry_Toolkit_Hardening {
 		if ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
 			$_SERVER['HTTPS'] = 'on';
 		}
-		if ( ! defined( 'FORCE_SSL_ADMIN' ) && ! FDHARDEN_IS_LOCAL ) {
+		if ( ! defined( 'FORCE_SSL_ADMIN' ) && ! self::is_local() ) {
 			define( 'FORCE_SSL_ADMIN', true );
 		}
-		if ( ! FDHARDEN_IS_LOCAL ) {
+		if ( ! self::is_local() ) {
 			add_filter( 'https_ssl_verify', '__return_true' );
 		}
 	}
@@ -211,7 +224,7 @@ final class Foundry_Toolkit_Hardening {
 	 * @return void
 	 */
 	public static function xmlrpc() {
-		if ( FDHARDEN_DISABLE_XMLRPC ) {
+		if ( true !== FOUNDRY_ALLOW_XMLRPC ) {
 			add_filter( 'xmlrpc_enabled', array( __CLASS__, 'xmlrpc_enabled' ), 999 );
 			add_filter( 'xmlrpc_methods', array( __CLASS__, 'xmlrpc_methods' ), 999 );
 			add_filter( 'wp_headers', array( __CLASS__, 'remove_pingback_header' ), 999 );
@@ -376,7 +389,7 @@ final class Foundry_Toolkit_Hardening {
 			$keep[] = 'product';
 		}
 		/**
-		 * Post types that keep their comments while FDHARDEN_DISABLE_COMMENTS is on.
+		 * Post types that keep their comments while FOUNDRY_ALLOW_COMMENTS is not set.
 		 *
 		 * @param string[] $keep Post type names.
 		 */
@@ -669,7 +682,7 @@ final class Foundry_Toolkit_Hardening {
 			'Permissions-Policy'     => 'geolocation=(), microphone=(), camera=(self)',
 		);
 		$site_is_https = 'https' === strtolower( (string) wp_parse_url( home_url(), PHP_URL_SCHEME ) );
-		if ( ( is_ssl() || $site_is_https ) && ! FDHARDEN_IS_LOCAL ) {
+		if ( ( is_ssl() || $site_is_https ) && ! self::is_local() ) {
 			$headers['Strict-Transport-Security'] = 'max-age=31536000';
 		}
 		/**

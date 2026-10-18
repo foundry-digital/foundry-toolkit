@@ -173,6 +173,8 @@ class WP_User {
 	public $user_login;
 	/** @var string */
 	public $user_email;
+	/** @var string */
+	public $user_pass = '';
 	/** @var string[] */
 	public $roles;
 

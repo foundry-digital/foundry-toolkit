@@ -1,7 +1,7 @@
 <?php
 /**
  * The Site Manager agent: answers signed requests with an inventory report
- * and applies WordPress's own updates when SM_ALLOW_UPDATES is defined.
+ * and applies WordPress's own updates when James asks for them.
  *
  * The protocol it implements is docs/protocol.md in the Site Manager
  * repository. Rule numbers (P21, S6) below refer to that document.
@@ -104,13 +104,6 @@ final class SiteManager_Agent {
 	public static $old_store_dirs = null;
 
 	/**
-	 * Opt-in override for tests; null means read the constant.
-	 *
-	 * @var bool|null
-	 */
-	public static $updates_override = null;
-
-	/**
 	 * Whether the shutdown release of the lock has been registered.
 	 *
 	 * @var bool
@@ -159,18 +152,6 @@ final class SiteManager_Agent {
 	}
 
 	/**
-	 * Whether the site has opted in to remote updates (P32).
-	 *
-	 * @return bool
-	 */
-	public static function updates_enabled() {
-		if ( is_bool( self::$updates_override ) ) {
-			return self::$updates_override;
-		}
-		return defined( 'SM_ALLOW_UPDATES' ) && true === SM_ALLOW_UPDATES;
-	}
-
-	/**
 	 * Server time, injectable for tests.
 	 *
 	 * @return int
@@ -180,7 +161,7 @@ final class SiteManager_Agent {
 	}
 
 	/**
-	 * Register the REST routes. POST routes exist only on opted-in sites.
+	 * Register the REST routes, the POST ones on every site (P32, 1.16.0).
 	 *
 	 * @return void
 	 */
@@ -216,9 +197,9 @@ final class SiteManager_Agent {
 				'permission_callback' => array( __CLASS__, 'permission' ),
 			)
 		);
-		if ( ! self::updates_enabled() ) {
-			return; // P32, S2: without the opt-in the POST routes do not exist.
-		}
+		// P32, S2: since 1.16.0 the write routes exist on every site with the
+		// Toolkit; SM_ALLOW_UPDATES is no longer read (ADR 0037). Every write
+		// is still signed for this site, single use and from James's click.
 		register_rest_route(
 			self::NAMESPACE_V1,
 			'/update',
@@ -376,7 +357,7 @@ final class SiteManager_Agent {
 			'agent'        => array(
 				'version'         => SITEMANAGER_AGENT_VERSION,
 				'php_file'        => basename( FOUNDRY_TOOLKIT_FILE ),
-				'updates_enabled' => self::updates_enabled(),
+				'updates_enabled' => true, // P32: always, since 1.16.0.
 			) + Foundry_Toolkit::report_fields(),
 			'generated_at' => gmdate( 'Y-m-d\TH:i:s\Z' ),
 			'wp'           => self::report_wp(),

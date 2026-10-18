@@ -9,7 +9,7 @@
 # The key lives only on the Site Manager server: the public key is read there
 # over ssh, and Site Manager's deploy/sign-release.sh signs the zip there.
 # A version with a suffix (1.3.0-rc1) becomes a pre-release, offered only to
-# sites that define FOUNDRY_TOOLKIT_PRERELEASES.
+# sites that define FOUNDRY_ALLOW_PRERELEASES.
 #
 # NOTES_FILE=path uses that file as the release notes; otherwise GitHub
 # writes them from the commits since the last release.

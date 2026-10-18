@@ -499,8 +499,8 @@ final class UpdateTest extends UpdateSupport {
 		$this->assertSame( '1.5.0', $data['to_version'] );
 	}
 
-	/** S2: without the opt-in the POST routes are never registered. */
-	public function test_post_routes_absent_without_opt_in(): void {
+	/** P32, S2 (1.16.0, ADR 0037): the write routes exist on every site, with no wp-config line. */
+	public function test_write_routes_need_no_opt_in(): void {
 		$routes = array();
 		Functions\when( 'register_rest_route' )->alias(
 			function ( string $ns, string $route ) use ( &$routes ): bool {
@@ -508,12 +508,6 @@ final class UpdateTest extends UpdateSupport {
 				return true;
 			}
 		);
-		SiteManager_Agent::$updates_override = false;
-		SiteManager_Agent::register_routes();
-		$this->assertSame( array( '/report', '/integrity', '/integrity/files/(?P<kind>plugin|theme)/(?P<slug>[A-Za-z0-9._-]+)' ), $routes, 'the read routes only (S2, P64, P68)' );
-
-		$routes                              = array();
-		SiteManager_Agent::$updates_override = true;
 		SiteManager_Agent::register_routes();
 		$this->assertSame( array( '/report', '/integrity', '/integrity/files/(?P<kind>plugin|theme)/(?P<slug>[A-Za-z0-9._-]+)', '/update', '/check', '/caches' ), $routes, 'no /cache route since 1.0.4, no rollback route since 1.0.7; check since 1.3.2; /caches since 1.4.0; /integrity since 1.5.0; its file list since 1.10.0' );
 	}

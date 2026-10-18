@@ -10,8 +10,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * While FDHARDEN_LOCK_PLUGINS is on (every site but a local one, unless
- * wp-config.php turns it off), nobody can add, upload, delete or edit
+ * Unless wp-config.php defines FOUNDRY_ALLOW_PLUGIN_INSTALLS as true (it is
+ * true by default only on a local site), nobody can add, upload, delete or edit
  * plugins and themes in wp-admin. A stolen client administrator login
  * uploaded a file manager plugin to Sydney Contemporary and used it to
  * install malware (James, 2026-10-17). No account is exempt: to add a

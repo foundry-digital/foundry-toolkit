@@ -4,7 +4,7 @@
  * upload, delete or edit plugins and themes in wp-admin, while every kind of
  * update keeps working (James, 2026-10-17, after a stolen admin login
  * uploaded a file manager plugin to Sydney Contemporary). No account is
- * exempt: to add a plugin, James turns the lock off in wp-config.php.
+ * exempt: to add a plugin, James defines FOUNDRY_ALLOW_PLUGIN_INSTALLS.
  *
  * @package FoundryToolkit
  */
@@ -96,7 +96,7 @@ final class PluginLockTest extends TestCase {
 	 */
 	public function test_hardening_boots_the_lock_unless_local(): void {
 		Foundry_Toolkit_Hardening::boot();
-		$this->assertTrue( FDHARDEN_LOCK_PLUGINS );
+		$this->assertFalse( FOUNDRY_ALLOW_PLUGIN_INSTALLS );
 		$this->assertNotFalse( has_filter( 'map_meta_cap', array( Foundry_Toolkit_Plugin_Lock::class, 'map_meta_cap' ) ) );
 		$this->assertNotFalse( has_filter( 'plugin_action_links_' . self::TOOLKIT, array( Foundry_Toolkit_Plugin_Lock::class, 'action_links' ) ) );
 		$this->assertNotFalse( has_filter( 'network_admin_plugin_action_links_' . self::TOOLKIT, array( Foundry_Toolkit_Plugin_Lock::class, 'action_links' ) ) );
@@ -105,12 +105,12 @@ final class PluginLockTest extends TestCase {
 	public function test_a_local_site_is_not_locked(): void {
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'local' );
 		Foundry_Toolkit_Hardening::boot();
-		$this->assertFalse( FDHARDEN_LOCK_PLUGINS );
+		$this->assertTrue( FOUNDRY_ALLOW_PLUGIN_INSTALLS );
 		$this->assertFalse( has_filter( 'map_meta_cap', array( Foundry_Toolkit_Plugin_Lock::class, 'map_meta_cap' ) ) );
 	}
 
 	public function test_wp_config_can_turn_it_off(): void {
-		define( 'FDHARDEN_LOCK_PLUGINS', false );
+		define( 'FOUNDRY_ALLOW_PLUGIN_INSTALLS', true );
 		Foundry_Toolkit_Hardening::boot();
 		$this->assertFalse( has_filter( 'map_meta_cap', array( Foundry_Toolkit_Plugin_Lock::class, 'map_meta_cap' ) ) );
 	}
