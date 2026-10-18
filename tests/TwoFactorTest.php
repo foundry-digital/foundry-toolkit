@@ -112,13 +112,12 @@ final class TwoFactorTest extends TestCase {
 	 * @param bool $plugin Whether the Two Factor plugin is active.
 	 */
 	private function enable( bool $plugin = true ): void {
-		define( 'FDHARDEN_REQUIRE_2FA', true );
 		if ( $plugin ) {
 			require_once __DIR__ . '/TwoFactorFakes.php';
 			Two_Factor_Core::$enabled = array(
-				2 => array( 'Two_Factor_Totp', 'Two_Factor_Backup_Codes' ),
-				6 => array( 'Two_Factor_Email' ),
-				8 => array( 'Two_Factor_Totp' ),
+				2  => array( 'Two_Factor_Totp', 'Two_Factor_Backup_Codes' ),
+				6  => array( 'Two_Factor_Email' ),
+				8  => array( 'Two_Factor_Totp' ),
 				10 => array( 'Two_Factor_Email' ),
 				11 => array( 'Two_Factor_Totp' ),
 			);
@@ -318,8 +317,7 @@ final class TwoFactorTest extends TestCase {
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();
-		$this->assertTrue( FDHARDEN_REQUIRE_2FA );
-		$this->assertFalse( defined( 'FDHARDEN_2FA_EXEMPT' ), 'no administrator is ever exempt' );
+		$this->assertFalse( FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA );
 		$this->assertNotFalse( has_action( 'admin_init', array( Foundry_Toolkit_Two_Factor::class, 'admin_init' ) ) );
 		$this->assertFalse( Foundry_Toolkit_Two_Factor::is_held( new WP_User( 1, 'jo', 'jo@example.test', array( 'administrator' ) ) ) );
 		$this->assertSame(
@@ -332,7 +330,7 @@ final class TwoFactorTest extends TestCase {
 	}
 
 	public function test_switched_off_in_wp_config(): void {
-		define( 'FDHARDEN_REQUIRE_2FA', false );
+		define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', true );
 		Functions\when( 'wp_get_environment_type' )->justReturn( 'production' );
 		Foundry_Toolkit_Hardening::define_toggles();
 		Foundry_Toolkit_Two_Factor::boot();

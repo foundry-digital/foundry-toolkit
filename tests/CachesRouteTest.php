@@ -92,8 +92,8 @@ final class CachesRouteTest extends UpdateSupport {
 		return $res->get_data()['caches'];
 	}
 
-	/** P63, S2: the route exists only where SM_ALLOW_UPDATES is true. */
-	public function test_route_absent_without_opt_in(): void {
+	/** P63, S2: the route exists on every site since 1.16.0 (ADR 0037). */
+	public function test_route_needs_no_opt_in(): void {
 		$routes = array();
 		Functions\when( 'register_rest_route' )->alias(
 			function ( string $ns, string $route, array $args ) use ( &$routes ): bool {
@@ -101,14 +101,8 @@ final class CachesRouteTest extends UpdateSupport {
 				return true;
 			}
 		);
-		SiteManager_Agent::$updates_override = false;
 		SiteManager_Agent::register_routes();
-		$this->assertArrayNotHasKey( '/caches', $routes );
-
-		$routes                              = array();
-		SiteManager_Agent::$updates_override = true;
-		SiteManager_Agent::register_routes();
-		$this->assertSame( 'POST', $routes['/caches'] ?? '', 'opted in, /caches is a POST route' );
+		$this->assertSame( 'POST', $routes['/caches'] ?? '', '/caches is a POST route' );
 		$this->assertArrayNotHasKey( '/cache', $routes, 'P62 stays withdrawn' );
 	}
 
@@ -230,7 +224,7 @@ final class CachesRouteTest extends UpdateSupport {
 				throw new RuntimeException( 'cURL error 28: timed out' );
 			},
 		);
-		$caches = $this->caches( $this->clear() );
+		$caches                            = $this->caches( $this->clear() );
 		$this->assertSame( 'failed', $caches[0]['status'] );
 		$this->assertStringContainsString( '(cURL error 28: timed out)', $caches[0]['detail'] );
 		$this->assertSame( array( 'mute', 'wp_rocket', 'unmute', 'rocket_cdn' ), $this->calls );
@@ -244,8 +238,8 @@ final class CachesRouteTest extends UpdateSupport {
 	 */
 	public static function settled_versions(): array {
 		return array(
-			'up to date'   => array( '3.23.4' ),
-			'none stored'  => array( '' ),
+			'up to date'  => array( '3.23.4' ),
+			'none stored' => array( '' ),
 		);
 	}
 

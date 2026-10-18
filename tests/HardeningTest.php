@@ -46,7 +46,7 @@ final class HardeningTest extends TestCase {
 		);
 		Functions\when( '__' )->returnArg( 1 );
 		if ( 'test_default_role_guard_is_on_with_the_registration_lock_off' === $this->getName( false ) ) {
-			define( 'FDHARDEN_LOCK_REGISTRATION', false ); // Before define_toggles(), as wp-config.php would.
+			define( 'FOUNDRY_ALLOW_REGISTRATION', true ); // Before define_toggles(), as wp-config.php would.
 		}
 		Foundry_Toolkit_Hardening::define_toggles();
 	}
@@ -148,7 +148,7 @@ final class HardeningTest extends TestCase {
 			'/sitemanager/v1/report'                => 1,
 			'/jetpack/v4/connection'                => 1,
 		);
-		$left = array_keys( Foundry_Toolkit_Hardening::hide_anon_rest_routes( $routes ) );
+		$left   = array_keys( Foundry_Toolkit_Hardening::hide_anon_rest_routes( $routes ) );
 		$this->assertSame(
 			array(
 				'/wp/v2/users/me',

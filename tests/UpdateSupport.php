@@ -42,13 +42,12 @@ abstract class UpdateSupport extends TestCase {
 		$this->root = sys_get_temp_dir() . '/sm-agent-tests-' . bin2hex( random_bytes( 4 ) );
 		mkdir( $this->root . '/wp-content/plugins', 0777, true );
 		mkdir( $this->root . '/wp-content/themes', 0777, true );
-		SiteManager_Agent::$old_store_dirs   = array();
-		SiteManager_Agent::$plugin_dir       = $this->root . '/wp-content/plugins';
-		SiteManager_Agent::$updates_override = true;
-		SiteManager_Agent::$clock            = static fn() => 1790000000;
-		$this->transients                    = array();
-		$this->site_transients               = array();
-		$this->plugins                       = array(
+		SiteManager_Agent::$old_store_dirs = array();
+		SiteManager_Agent::$plugin_dir     = $this->root . '/wp-content/plugins';
+		SiteManager_Agent::$clock          = static fn() => 1790000000;
+		$this->transients                  = array();
+		$this->site_transients             = array();
+		$this->plugins                     = array(
 			'gravityforms/gravityforms.php' => array(
 				'Name'    => 'Gravity Forms',
 				'Version' => '2.9.12',
@@ -58,7 +57,7 @@ abstract class UpdateSupport extends TestCase {
 				'Version' => '1.7.2',
 			),
 		);
-		$this->theme_versions                = array( 'achk27' => '1.4.0' );
+		$this->theme_versions              = array( 'achk27' => '1.4.0' );
 		$this->write_plugin( 'gravityforms/gravityforms.php', '2.9.12' );
 		$this->write_plugin( 'hello.php', '1.7.2' );
 		$this->write_theme( 'achk27', '1.4.0' );
@@ -158,7 +157,6 @@ abstract class UpdateSupport extends TestCase {
 	protected function tearDown(): void {
 		SiteManager_Agent::$old_store_dirs   = null;
 		SiteManager_Agent::$plugin_dir       = null;
-		SiteManager_Agent::$updates_override = null;
 		SiteManager_Agent::$upgrader_factory = null;
 		SiteManager_Agent::$admin_loader     = null;
 		SiteManager_Agent::$clock            = null;

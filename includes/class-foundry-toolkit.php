@@ -61,6 +61,7 @@ final class Foundry_Toolkit {
 				self::$leftovers[] = $f;
 			}
 		}
+		// The old must-use hardening defines FDHARDEN_IS_LOCAL; since 1.16.0 we never do.
 		$old_hardening = defined( 'FDHARDEN_IS_LOCAL' ) && ! ( class_exists( 'Foundry_Toolkit_Hardening', false ) && Foundry_Toolkit_Hardening::$booted );
 		if ( is_file( Foundry_Toolkit_Loader::mu_dir() . '/' . self::OLD_HARDENING_FILE ) ) {
 			$old_hardening     = true;

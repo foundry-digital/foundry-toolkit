@@ -76,8 +76,20 @@ final class ReportTest extends TestCase {
 		);
 		Functions\when( 'wp_get_themes' )->justReturn(
 			array(
-				'achk27'           => new WP_Theme( 'achk27', array( 'Name' => 'Art Central 2027', 'Version' => '1.4.0' ) ),
-				'twentytwentyfive' => new WP_Theme( 'twentytwentyfive', array( 'Name' => 'Twenty Twenty-Five', 'Version' => '1.2' ) ),
+				'achk27'           => new WP_Theme(
+					'achk27',
+					array(
+						'Name'    => 'Art Central 2027',
+						'Version' => '1.4.0',
+					)
+				),
+				'twentytwentyfive' => new WP_Theme(
+					'twentytwentyfive',
+					array(
+						'Name'    => 'Twenty Twenty-Five',
+						'Version' => '1.2',
+					)
+				),
 			)
 		);
 		Functions\when( 'get_plugins' )->justReturn(
@@ -174,7 +186,7 @@ final class ReportTest extends TestCase {
 		// relative to the WordPress root, in the file and in the message.
 		$this->assertSame( 'wp-content/plugins/x.php', $r['health']['last_fatal']['file'] );
 		$this->assertSame( 'Boom in wp-content/plugins/x.php by [email]', $r['health']['last_fatal']['message'] );
-		$this->assertFalse( $r['agent']['updates_enabled'] );
+		$this->assertTrue( $r['agent']['updates_enabled'], 'P32: always since 1.16.0' );
 		// Foundry Toolkit (ADR 0025): named for the plugin's main file, and
 		// honest about the loader and hardening, which this test never set up.
 		$this->assertSame( 'foundry-toolkit.php', $r['agent']['php_file'] );

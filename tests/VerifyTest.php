@@ -120,13 +120,21 @@ final class VerifyTest extends TestCase {
 		$this->assertSame( 'original', $this->transients[ $key ], 'a replay must not overwrite the used nonce' );
 	}
 
-	public function test_post_routes_absent_without_opt_in(): void {
-		// SM_ALLOW_UPDATES is not defined in the test process, so only the
-		// read routes may be registered: the report and integrity (S2, P64).
-		$this->assertFalse( SiteManager_Agent::updates_enabled() );
-		Functions\expect( 'register_rest_route' )->once()->with( 'sitemanager/v1', '/report', Mockery::type( 'array' ) );
-		Functions\expect( 'register_rest_route' )->once()->with( 'sitemanager/v1', '/integrity', Mockery::on( fn( array $a ) => 'GET' === $a['methods'] ) );
+	public function test_write_routes_exist_with_no_wp_config_line(): void {
+		// No constant is defined in the test process: since 1.16.0 the write
+		// routes are registered anyway (P32, S2, ADR 0037).
+		$this->assertFalse( defined( 'SM_ALLOW_UPDATES' ) );
+		$routes = array();
+		Functions\when( 'register_rest_route' )->alias(
+			function ( string $ns, string $route, array $args ) use ( &$routes ): bool {
+				$routes[ $route ] = $args['methods'];
+				return true;
+			}
+		);
 		SiteManager_Agent::register_routes();
+		$this->assertSame( 'POST', $routes['/update'] ?? '' );
+		$this->assertSame( 'POST', $routes['/check'] ?? '' );
+		$this->assertSame( 'POST', $routes['/caches'] ?? '' );
 	}
 
 	public function test_boot_without_key_registers_nothing(): void {

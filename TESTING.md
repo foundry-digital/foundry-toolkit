@@ -19,11 +19,7 @@ make zip PUBLIC_KEY="$PUB"
 
 `python3 -c` reads the key out of the fixture; `make zip` copies the plugin into `build/foundry-toolkit/` with the key baked in and zips it. Upload `build/foundry-toolkit.zip` in Plugins, Add New, Upload Plugin, and activate it. Check that `wp-content/mu-plugins/0-foundry-toolkit.php` appeared.
 
-Add the opt-in to `wp-config.php`, above the "That's all, stop editing" line:
-
-```php
-define( 'SM_ALLOW_UPDATES', true );
-```
+Nothing goes in `wp-config.php`: since 1.16.0 the write routes exist on every site with the Toolkit (P32, ADR 0037).
 
 ## 2. A signing helper
 
@@ -98,9 +94,9 @@ Expected: the P22 `rest_no_route` body, although the request is correctly signed
 
 The agent refuses a write when its own `home_url()` is `http://`, however well it is signed (P21a). Seeing that needs Sandbox switched back to `http://` in Settings, General, so the fixture `post_update_http_site` covers it in `make check` instead. Sending the section 4 request to `http://sandbox.local` while the site is on `https://` also fails, but only because the signature names the wrong address (S4).
 
-## 7. Without the opt-in
+## 7. No opt-in line
 
-Remove the `SM_ALLOW_UPDATES` line and repeat the update request: expected the P22 `rest_no_route` body (S2). Put it back afterwards.
+With no `SM_ALLOW_UPDATES` in `wp-config.php`, the update request in section 4 still works (P32, 1.16.0).
 
 ## Record
 

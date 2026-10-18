@@ -5,16 +5,16 @@
  * @package FoundryToolkit
  */
 
-define( 'SM_ALLOW_UPDATES', true );
 define( 'SM_AGENT_TESTING', true );
 define( 'DB_NAME', 'wordpress' );
-define( 'FDHARDEN_IS_LOCAL', false );
-define( 'FDHARDEN_DISALLOW_FILE_MODS', false );
-define( 'FDHARDEN_DISABLE_XMLRPC', true );
-define( 'FDHARDEN_DISABLE_COMMENTS', true );
-define( 'FDHARDEN_DISABLE_FEEDS', true );
-define( 'FDHARDEN_DISABLE_APP_PASSWORDS', true );
-define( 'FDHARDEN_LOCK_REGISTRATION', true );
-define( 'FDHARDEN_LOCK_PLUGINS', true );
-define( 'FDHARDEN_REQUIRE_2FA', true );
-define( 'FOUNDRY_TOOLKIT_PRERELEASES', false );
+define( 'FOUNDRY_ALLOW_XMLRPC', false );
+define( 'FOUNDRY_ALLOW_COMMENTS', false );
+define( 'FOUNDRY_ALLOW_FEEDS', false );
+define( 'FOUNDRY_ALLOW_APP_PASSWORDS', false );
+define( 'FOUNDRY_ALLOW_REGISTRATION', false );
+define( 'FOUNDRY_ALLOW_PLUGIN_INSTALLS', false );
+define( 'FOUNDRY_ALLOW_TOOLS', false );
+define( 'FOUNDRY_ALLOW_SETTINGS', false );
+define( 'FOUNDRY_ALLOW_ADMIN_CHANGES', false );
+define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', false );
+define( 'FOUNDRY_ALLOW_PRERELEASES', false );

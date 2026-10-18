@@ -46,7 +46,7 @@ final class Foundry_Toolkit_Updater {
 	/**
 	 * The latest usable release, cached for six hours (one hour after a
 	 * failure, so a GitHub outage does not mean a request on every check).
-	 * Set FOUNDRY_TOOLKIT_PRERELEASES in wp-config.php to be offered
+	 * Set FOUNDRY_ALLOW_PRERELEASES in wp-config.php to be offered
 	 * pre-releases such as 1.3.0-rc1, on a test site only.
 	 *
 	 * @return array{version: string, package: string, url: string, notes: string}|null
@@ -56,7 +56,7 @@ final class Foundry_Toolkit_Updater {
 		if ( is_array( $cached ) && array_key_exists( 'release', $cached ) ) {
 			return $cached['release'];
 		}
-		$pre      = defined( 'FOUNDRY_TOOLKIT_PRERELEASES' ) && FOUNDRY_TOOLKIT_PRERELEASES;
+		$pre      = defined( 'FOUNDRY_ALLOW_PRERELEASES' ) && true === FOUNDRY_ALLOW_PRERELEASES;
 		$response = wp_remote_get(
 			$pre ? self::API . '?per_page=20' : self::API . '/latest',
 			array(

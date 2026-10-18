@@ -2,36 +2,47 @@
 
 Foundry Digital's plugin for client WordPress sites. One plugin, two jobs:
 
-- **The Site Manager agent.** Answers Ed25519-signed requests from Site Manager (James's Mac app) with an inventory report, and applies WordPress's own updates when the site opts in with `SM_ALLOW_UPDATES`. It holds only the public key: it can check a signature, never make one.
-- **Hardening.** XML-RPC, comments, file editors, author enumeration, anonymous user endpoints, security headers, SSL for admin, emojis, oEmbed and feeds. Ported from Foundry Security Hardening 1.6.3, with the same `FDHARDEN_*` switches.
+- **The Site Manager agent.** Answers Ed25519-signed requests from Site Manager (James's Mac app) with an inventory report, and applies WordPress's own updates when James clicks Update in Site Manager. It holds only the public key: it can check a signature, never make one.
+- **Hardening.** XML-RPC, comments, file editors, author enumeration, anonymous user endpoints, security headers, SSL for admin, emojis, oEmbed and feeds. Ported from Foundry Security Hardening 1.6.3, then the plugin lock, the admin lock and required 2FA. Each is unlocked per site with a `FOUNDRY_ALLOW_*` switch (below).
 
 It replaces two must-use files, `foundry-sitemanager.php` and `foundry-hardening.php`. While either is still in `wp-content/mu-plugins/`, the toolkit leaves that job to it and shows a notice asking you to delete it.
 
 ## Install
 
-1. Plugins, Add New, Upload Plugin, choose `foundry-toolkit.zip` from the latest release, then Activate.
-2. To let Site Manager run updates, add this to `wp-config.php` above "That's all, stop editing":
-
-   ```php
-   define( 'SM_ALLOW_UPDATES', true );
-   ```
+Plugins, Add New, Upload Plugin, choose `foundry-toolkit.zip` from the latest release, then Activate. Nothing goes in `wp-config.php`: Site Manager can update the site as soon as the Toolkit is active (1.16.0).
 
 On activation the plugin writes `wp-content/mu-plugins/0-foundry-toolkit.php`. That small loader includes the toolkit before any other plugin, the way a bouncer is at the door before the guests arrive: hardening's constants (`DISALLOW_FILE_EDIT`, the HTTPS fix) only count if they are set first. Deactivating removes it. If the folder is not writable, a notice says so.
 
 ## Switches
 
-Define any of these in `wp-config.php` to opt a site out. All default to on except the first.
+Everything is locked by default. Each switch unlocks one thing: add `define( 'FOUNDRY_ALLOW_…', true );` to `wp-config.php`, do the job, then take the line out. A line in `wp-config.php` is always an unlock, never a lock (ADR 0037 in the Site Manager repository). It is like a building where every door is locked and each key is in the manager's safe: a stolen staff badge (a leaked password) opens nothing, because the keys need file access to the server.
 
-| Constant | Default | Turn it off (or on) when |
-| --- | --- | --- |
-| `FDHARDEN_DISALLOW_FILE_MODS` | false | On only for a site deployed by git: it also removes the installer and updates, including Site Manager's. |
-| `FDHARDEN_DISABLE_XMLRPC` | true | The site needs XML-RPC beyond Jetpack. While Jetpack is connected, its own methods get through anyway. |
-| `FDHARDEN_DISABLE_COMMENTS` | true | The site runs comments. WooCommerce product reviews stay while reviews are on in WooCommerce. |
-| `FDHARDEN_DISABLE_FEEDS` | true | Anything reads the site's RSS. |
-| `FDHARDEN_DISABLE_APP_PASSWORDS` | true | An integration signs in with an application password. |
-| `FDHARDEN_LOCK_REGISTRATION` | true | Visitors register through `wp-login.php`. WooCommerce and Gravity Forms are unaffected either way. On or off, the default role is never one that can do a held capability: an administrator, editor or shop manager default reads as subscriber (1.15.0). |
-| `FDHARDEN_LOCK_PLUGINS` | true (false on a local site) | You need to add a plugin or theme: set it to false for a moment, then take the line out. While it is on, nobody can add, upload, delete or edit plugins and themes in wp-admin, or deactivate Foundry Toolkit; no account is exempt (1.12.0). Updating still works for every administrator: the Update buttons, WordPress's automatic updates and Site Manager's. |
-| `FDHARDEN_REQUIRE_2FA` | true | Only in an emergency, such as every administrator locked out. Administrators, editors, shop managers and anyone given administrator-level powers must set up an authenticator app before they can use the site (below). |
+| Constant | Unlocks |
+| --- | --- |
+| `FOUNDRY_ALLOW_PLUGIN_INSTALLS` | Adding, uploading, deleting and editing plugins and themes, and deactivating Foundry Toolkit (1.12.0). Unlocked by default on a local site. Updating works either way: the Update buttons, WordPress's automatic updates and Site Manager's. |
+| `FOUNDRY_ALLOW_TOOLS` | Tools, Export and Import, the personal-data export and erase tools, and Site Health (1.16.0). WooCommerce's Products, Export keeps working either way. |
+| `FOUNDRY_ALLOW_SETTINGS` | Changing the site address, admin email, theme or upload path; Settings, All Settings (1.16.0). Additional CSS, in the Customizer, the Site Editor or a block, is never locked. |
+| `FOUNDRY_ALLOW_ADMIN_CHANGES` | Giving anyone the Administrator role, and editing, deleting or changing the role of another privileged account (1.16.0). |
+| `FOUNDRY_ALLOW_REGISTRATION` | Visitors registering through `wp-login.php`. WooCommerce and Gravity Forms create accounts themselves and are unaffected either way. Locked or not, the default role is never one that can do a held capability: an administrator, editor or shop manager default reads as subscriber (1.15.0). |
+| `FOUNDRY_ALLOW_XMLRPC` | XML-RPC beyond Jetpack, such as the WordPress mobile app. While Jetpack is connected, its own methods get through anyway. |
+| `FOUNDRY_ALLOW_COMMENTS` | Comments. WooCommerce product reviews stay while reviews are on in WooCommerce. |
+| `FOUNDRY_ALLOW_FEEDS` | The RSS feeds, for anything that reads them (Mailchimp RSS campaigns, podcasts). |
+| `FOUNDRY_ALLOW_APP_PASSWORDS` | Application passwords, for an integration that signs in to the REST API with one. |
+| `FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA` | Only in an emergency, such as every administrator locked out: privileged accounts no longer have to set up an authenticator app (below). |
+| `FOUNDRY_ALLOW_PRERELEASES` | On a test site only: be offered pre-releases such as `1.3.0-rc1`. |
+
+A site deployed only by git can define WordPress's own `DISALLOW_FILE_MODS`, which also removes updates, Site Manager's included.
+
+Before 1.16.0 the switches were `FDHARDEN_*` (each pointing its own way) and Site Manager's updates needed `SM_ALLOW_UPDATES`. None of those is read any more: after a site updates, take those lines out of its `wp-config.php`.
+
+## Locked tools and settings
+
+After the Sydney Contemporary hack (a client administrator's leaked password), the tools and settings such a login would use, and our sites don't need day to day, are locked for everyone, administrators included (ADR 0036). What still works: every normal Settings page (the site title saves; the address and admin email keep their value, with a notice naming `FOUNDRY_ALLOW_SETTINGS`), menus, widgets and the Customizer, editing your own profile, creating and editing portal users, subscribers, authors and customers, Gravity Forms entry export, Elementor, and updates.
+
+- **Administrators.** No role picker offers Administrator, or any other role with administrator-level powers (editors and shop managers can still be created). Opening, editing, resetting the password of, deleting or demoting another privileged account (another administrator, an editor, a shop manager, or any role with administrator-level powers) is refused with a message naming `FOUNDRY_ALLOW_ADMIN_CHANGES`. As a backstop for plugins with their own user screens or imports, a logged-in request can never give an account an administrator-level role or capability, or change another privileged account's password or email.
+- **Never removed:** the administrator-level capabilities themselves (`manage_options` and the rest of ticket 071's list), so the 2FA hold, the privileged-account count and AMA Portals behave as before.
+- **Only for a logged-in user.** WP-CLI without `--user`, cron, WordPress's own writes and Site Manager's signed requests are untouched. So `wp user create jo jo@example.com --role=administrator`, `wp option update admin_email …`, `wp theme activate …` and `wp export` work while everything is locked.
+- **Known limit:** someone with file access to the server (SFTP, a backdoor) can add a switch. The locks stop what a stolen password can do, not code already on the server.
 
 ## Required 2FA for privileged accounts
 
@@ -43,7 +54,7 @@ On every site with the WordPress.org [Two Factor](https://wordpress.org/plugins/
 - While someone is held, only the wizard, logging out, the plugin's own REST routes (`two-factor/1.0`) and the Heartbeat get through. Any other REST request is refused with a 403.
 - Without the plugin, nobody is held, and the Site Manager report says so (`users.two_factor_plugin_missing`).
 
-Getting back in: a backup code at login after a lost phone; another administrator resetting the user's 2FA on their profile; or, with everyone locked out, `define( 'FDHARDEN_REQUIRE_2FA', false );` in `wp-config.php`, or `wp user meta delete <id> _two_factor_enabled_providers` with WP-CLI.
+Getting back in: a backup code at login after a lost phone; `wp user meta delete <id> _two_factor_enabled_providers` with WP-CLI; or another administrator resetting the user's 2FA on their profile, which needs `FOUNDRY_ALLOW_ADMIN_CHANGES` for a moment, since editing another administrator is locked (1.16.0). With everyone locked out, `define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', true );` in `wp-config.php`.
 
 Filters: `fdharden_security_headers`, `fdharden_blocked_anon_rest_routes`, `fdharden_keep_comments_post_types`, `fdharden_jetpack_xmlrpc_prefixes`.
 
@@ -55,7 +66,7 @@ Nothing here may break a WooCommerce or Gravity Forms payment. `tests/HardeningT
 
 The plugin checks this repository's latest GitHub release whenever WordPress runs its own update check, at most every six hours. A newer release shows as an update in WordPress and in Site Manager, like any other plugin. It installs only if the zip's signature verifies against the Site Manager key built into the plugin (S13). A zip from anywhere else, or one changed after it was signed, is refused with a message on the update screen. Automatic updates stay off: it updates when you click.
 
-Define `FOUNDRY_TOOLKIT_PRERELEASES` as `true` in `wp-config.php` on a test site to be offered pre-releases such as `1.3.0-rc1`.
+Define `FOUNDRY_ALLOW_PRERELEASES` as `true` in `wp-config.php` on a test site to be offered pre-releases such as `1.3.0-rc1`.
 
 ## Releasing
 
