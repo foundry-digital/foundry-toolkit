@@ -159,6 +159,13 @@ final class Foundry_Toolkit_Integrity {
 	public static $ini_prepend = null;
 
 	/**
+	 * Returns the package's $wp_local_package; null means the global.
+	 *
+	 * @var callable|null
+	 */
+	public static $local_package = null;
+
+	/**
 	 * Returns administrators stored and listed, array( int, int ); null means the database.
 	 *
 	 * @var callable|null
@@ -303,7 +310,7 @@ final class Foundry_Toolkit_Integrity {
 	public static function run() {
 		$started = self::now();
 		$version = (string) get_bloginfo( 'version' );
-		$locale  = (string) get_locale();
+		$locale  = self::package_locale();
 		$out     = array(
 			'ok'          => true,
 			'complete'    => true,
@@ -554,6 +561,22 @@ final class Foundry_Toolkit_Integrity {
 			}
 		}
 		return $result;
+	}
+
+	/**
+	 * The locale of the WordPress package on disk: $wp_local_package, which
+	 * a translated package's version.php sets, or en_US when it sets none
+	 * (1.16.1). The site's language setting is not it: a zh_CN package ships
+	 * its own version.php whatever language the site is set to.
+	 *
+	 * @return string
+	 */
+	private static function package_locale() {
+		$package = is_callable( self::$local_package ) ? call_user_func( self::$local_package ) : ( $GLOBALS['wp_local_package'] ?? null );
+		if ( is_string( $package ) && 1 === preg_match( '/^[a-z]{2,3}(_[A-Z]{2})?(_[a-z0-9]+)?$/', $package ) ) {
+			return $package;
+		}
+		return 'en_US';
 	}
 
 	/**

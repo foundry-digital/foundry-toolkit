@@ -118,6 +118,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$admin_counts     = fn() => array( 1, 1 );
 		Foundry_Toolkit_Integrity::$triggers         = fn() => array();
 		Foundry_Toolkit_Integrity::$mac_key          = 'test-key';
+		Foundry_Toolkit_Integrity::$local_package    = fn() => null;
 	}
 
 	protected function tearDown(): void {
@@ -137,6 +138,7 @@ final class IntegrityTest extends UpdateSupport {
 		Foundry_Toolkit_Integrity::$admin_counts     = null;
 		Foundry_Toolkit_Integrity::$triggers         = null;
 		Foundry_Toolkit_Integrity::$mac_key          = null;
+		Foundry_Toolkit_Integrity::$local_package    = null;
 		$this->rm( rtrim( $this->site_root, '/' ) );
 		parent::tearDown();
 	}
@@ -161,7 +163,7 @@ final class IntegrityTest extends UpdateSupport {
 				'files'   => 3,
 			),
 			$out['core'],
-			'en_AU has no checksums, so en_US is used; readme and wp-content are skipped'
+			'an English package is checked against en_US; readme and wp-content are skipped'
 		);
 		$this->assertSame(
 			array(
@@ -751,5 +753,48 @@ final class IntegrityTest extends UpdateSupport {
 		$this->expire();
 		$this->put( 'wp-content/plugins/wp-rocket/lib/shell.php5', '<?php // dropped' );
 		$this->assertSame( array( 'wp-content/plugins/wp-rocket/lib/shell.php5' ), Foundry_Toolkit_Integrity::run()['unexpected'] );
+	}
+
+	/**
+	 * 1.16.1: core is checked against the package's own locale
+	 * ($wp_local_package), not the site's language setting. A zh_CN package
+	 * ships its own version.php, so on a site set to en_AU it was flagged.
+	 */
+	public function test_core_uses_the_package_locale(): void {
+		Foundry_Toolkit_Integrity::$local_package  = fn() => 'zh_CN';
+		$zh                                        = $this->core;
+		$zh['wp-includes/version.php']             = $this->put( 'wp-includes/version.php', '<?php $wp_version = "6.8.2"; $wp_local_package = "zh_CN";' );
+		$asked                                     = array();
+		Foundry_Toolkit_Integrity::$core_checksums = function ( string $v, string $l ) use ( $zh, &$asked ) {
+			$asked[] = $l;
+			return 'zh_CN' === $l ? $zh : $this->core;
+		};
+		$out                                       = Foundry_Toolkit_Integrity::run();
+		$this->assertSame( array( 'zh_CN' ), $asked, 'never the site language, en_AU' );
+		$this->assertSame( 'zh_CN', $out['locale'] );
+		$this->assertTrue( $out['core']['checked'] );
+		$this->assertSame( array(), $out['modified'] );
+	}
+
+	/**
+	 * 1.16.1: an English package on a site set to Chinese is checked against
+	 * en_US, whose version.php it has, not zh_CN's. A package locale that is
+	 * not a locale is ignored the same way.
+	 */
+	public function test_core_without_a_package_locale_uses_en_us(): void {
+		Functions\when( 'get_locale' )->justReturn( 'zh_CN' );
+		foreach ( array( null, '../../etc', 42 ) as $package ) {
+			Foundry_Toolkit_Integrity::$local_package  = fn() => $package;
+			$this->expire();
+			$asked                                     = array();
+			Foundry_Toolkit_Integrity::$core_checksums = function ( string $v, string $l ) use ( &$asked ) {
+				$asked[] = $l;
+				return 'en_US' === $l ? $this->core : array( 'wp-includes/version.php' => md5( 'the zh_CN copy' ) );
+			};
+			$out                                       = Foundry_Toolkit_Integrity::run();
+			$this->assertSame( array( 'en_US' ), $asked, (string) json_encode( $package ) );
+			$this->assertSame( 'en_US', $out['locale'] );
+			$this->assertSame( array(), $out['modified'] );
+		}
 	}
 }
