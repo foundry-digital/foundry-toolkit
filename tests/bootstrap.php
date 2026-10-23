@@ -262,6 +262,23 @@ function sm_test_role_caps(): array {
 	);
 }
 
+/**
+ * The roles option ({prefix}user_roles) as WordPress stores it, built from
+ * sm_test_role_caps().
+ *
+ * @return array<string, array{name: string, capabilities: array<string, bool>}>
+ */
+function sm_test_roles_option(): array {
+	$roles = array();
+	foreach ( sm_test_role_caps() as $slug => $caps ) {
+		$roles[ $slug ] = array(
+			'name'         => ucfirst( str_replace( '_', ' ', $slug ) ),
+			'capabilities' => $caps,
+		);
+	}
+	return $roles;
+}
+
 /** Minimal wpdb: answers the handful of queries the agent runs from a canned map. */
 class wpdb {
  // phpcs:ignore PEAR.NamingConventions.ValidClassName.StartWithCapital

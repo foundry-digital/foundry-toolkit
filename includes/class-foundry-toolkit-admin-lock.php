@@ -20,16 +20,21 @@ if ( ! defined( 'ABSPATH' ) ) {
  * - FOUNDRY_ALLOW_SETTINGS: the site address, admin email, theme and upload
  *   path options, switching theme, Settings, All Settings. Additional CSS
  *   stays open (James, 2026-10-18).
- * - FOUNDRY_ALLOW_ADMIN_CHANGES: editing, resetting the password of,
- *   deleting or demoting another privileged account. Creating administrators
- *   stays open: site administrators still make them (James, 2026-10-18).
+ * - FOUNDRY_ALLOW_ADMIN_CHANGES: giving anyone an administrator-level role
+ *   or capability, a role gaining one, and editing, deleting or demoting
+ *   another privileged account. Only James adds administrators (James,
+ *   2026-10-23, ticket 075). Editors, shop managers, customers and portal
+ *   users can still be created.
  *
  * It refuses actions and targets, never the administrator-level
  * capabilities themselves (Foundry_Toolkit_Privilege::HELD_CAPS), so the
  * 2FA hold, the privileged-account count and AMA Portals, which gates its
  * screens on manage_options, behave as before. The option and account
  * guards apply only with a logged-in user: WP-CLI without --user, cron, core's own
- * writes and Site Manager's signed requests are untouched.
+ * writes and Site Manager's signed requests are untouched. The two backstops
+ * on roles (refuse_admin_role_meta, keep_role_definitions) also cover
+ * visitors, so a registration bug cannot make an administrator; only WP-CLI,
+ * cron and WordPress's install are left alone.
  */
 final class Foundry_Toolkit_Admin_Lock {
 
@@ -73,7 +78,7 @@ final class Foundry_Toolkit_Admin_Lock {
 	/** FOUNDRY_ALLOW_ADMIN_CHANGES: refused when the target is another held account. */
 	public const USER_CAPS = array( 'edit_user', 'delete_user', 'remove_user', 'promote_user' );
 
-	/** FOUNDRY_ALLOW_ADMIN_CHANGES: the screens that open another account. */
+	/** FOUNDRY_ALLOW_ADMIN_CHANGES: the screens that give a role or open another account. */
 	public const USER_PAGES = array( 'user-new.php', 'user-edit.php', 'profile.php', 'users.php' );
 
 	/**
@@ -86,6 +91,14 @@ final class Foundry_Toolkit_Admin_Lock {
 		'settings' => false,
 		'admins'   => false,
 	);
+
+	/**
+	 * The roles as stored when this request first saved them, so a role
+	 * removed and re-added in one request is compared with what it had.
+	 *
+	 * @var array<string, mixed>|null
+	 */
+	private static $roles_at_start = null;
 
 	/**
 	 * Register the hooks for the groups that are locked. Called from
@@ -115,9 +128,13 @@ final class Foundry_Toolkit_Admin_Lock {
 			add_action( 'load-options.php', array( __CLASS__, 'refuse_all_settings' ) );
 		}
 		if ( $admins ) {
+			add_filter( 'editable_roles', array( __CLASS__, 'editable_roles' ) );
 			foreach ( self::USER_PAGES as $page ) {
 				add_action( 'load-' . $page, array( __CLASS__, 'refuse_user_screen' ) );
 			}
+			add_filter( 'update_user_metadata', array( __CLASS__, 'refuse_admin_role_meta' ), 10, 4 );
+			add_filter( 'add_user_metadata', array( __CLASS__, 'refuse_admin_role_meta' ), 10, 4 );
+			add_filter( 'pre_update_option', array( __CLASS__, 'keep_role_definitions' ), 10, 3 );
 			add_filter( 'wp_pre_insert_user_data', array( __CLASS__, 'keep_held_login' ), 10, 3 );
 		}
 	}
@@ -181,6 +198,41 @@ final class Foundry_Toolkit_Admin_Lock {
 			|| ( 'edit.php' === $pagenow && 'product' === $post_type );
 	}
 
+	/**
+	 * Whether a role, or a capability given to an account directly, is
+	 * administrator-level (Foundry_Toolkit_Privilege::ADMIN_CAPS). The stored
+	 * role is read, not user_can(), so shop managers, whom WooCommerce gives
+	 * edit_users only at run time and only for customers, are not: they can
+	 * still be created, like editors.
+	 *
+	 * @param string $name Role slug or capability.
+	 * @return bool
+	 */
+	private static function is_admin_level( $name ) {
+		if ( 'administrator' === $name || in_array( $name, Foundry_Toolkit_Privilege::ADMIN_CAPS, true ) ) {
+			return true;
+		}
+		$role = get_role( $name );
+		if ( ! $role instanceof WP_Role ) {
+			return false;
+		}
+		foreach ( Foundry_Toolkit_Privilege::ADMIN_CAPS as $cap ) {
+			if ( $role->has_cap( $cap ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether this request is one the role backstops leave alone: WP-CLI
+	 * (how James adds an administrator), cron, or WordPress's own install.
+	 *
+	 * @return bool
+	 */
+	private static function is_trusted_context() {
+		return ( defined( 'WP_CLI' ) && WP_CLI ) || wp_doing_cron() || wp_installing();
+	}
 
 	/**
 	 * Whether a user is a held account other than the acting user.
@@ -269,18 +321,111 @@ final class Foundry_Toolkit_Admin_Lock {
 	}
 
 	/**
-	 * On the user screens: refuse opening another held account's profile,
-	 * with the switch named (core's own refusals say only "Sorry, you are not
-	 * allowed"). Giving a role, administrator included, is not refused.
+	 * Filter editable_roles: no administrator-level role in any role picker
+	 * (administrator, or a custom role with manage_options and the like),
+	 * which also makes core refuse it on a new user, a profile save, the
+	 * bulk change and the REST API.
+	 *
+	 * @param array<string, mixed> $roles Roles by slug.
+	 * @return array<string, mixed>
+	 */
+	public static function editable_roles( $roles ) {
+		foreach ( array_keys( $roles ) as $slug ) {
+			if ( self::is_admin_level( (string) $slug ) ) {
+				unset( $roles[ $slug ] );
+			}
+		}
+		return $roles;
+	}
+
+	/**
+	 * On the user screens: refuse a request that gives an administrator-level
+	 * role, or opens another held account's profile, with the switch named
+	 * (core's own refusals say only "Sorry, you are not allowed").
 	 *
 	 * @return void
 	 */
 	public static function refuse_user_screen() {
-		// phpcs:ignore WordPress.Security.NonceVerification -- only refuses; core checks the nonce before it saves.
+		// phpcs:disable WordPress.Security.NonceVerification -- only refuses; core checks the nonce before it saves.
+		$roles  = array(
+			isset( $_POST['role'] ) ? sanitize_key( wp_unslash( $_POST['role'] ) ) : '',
+			isset( $_REQUEST['new_role'] ) ? sanitize_key( wp_unslash( $_REQUEST['new_role'] ) ) : '',
+			isset( $_REQUEST['new_role2'] ) ? sanitize_key( wp_unslash( $_REQUEST['new_role2'] ) ) : '',
+		);
 		$target = isset( $_REQUEST['user_id'] ) ? (int) $_REQUEST['user_id'] : 0;
+		// phpcs:enable
+		foreach ( $roles as $role ) {
+			if ( '' !== $role && self::is_admin_level( $role ) ) {
+				wp_die( esc_html( self::message( 'FOUNDRY_ALLOW_ADMIN_CHANGES' ) ), '', array( 'response' => 403 ) );
+			}
+		}
 		if ( self::is_other_held( $target, get_current_user_id() ) ) {
 			wp_die( esc_html( self::message( 'FOUNDRY_ALLOW_ADMIN_CHANGES' ) ), '', array( 'response' => 403 ) );
 		}
+	}
+
+	/**
+	 * Filter update_user_metadata and add_user_metadata: the backstop for a
+	 * plugin that sets a role in its own code. A request, a visitor's
+	 * included, cannot add an administrator-level role, or an
+	 * administrator-level capability given directly, to an account that does
+	 * not already have it. A new user written this way is left with no role.
+	 *
+	 * @param mixed  $check      Null to let the write happen.
+	 * @param int    $object_id  The user.
+	 * @param string $meta_key   The meta key.
+	 * @param mixed  $meta_value The value being written.
+	 * @return mixed False refuses the write.
+	 */
+	public static function refuse_admin_role_meta( $check, $object_id, $meta_key, $meta_value ) {
+		if ( ! is_string( $meta_key ) || 'capabilities' !== substr( $meta_key, -12 ) || ! is_array( $meta_value ) || self::is_trusted_context() ) {
+			return $check;
+		}
+		$old = get_user_meta( (int) $object_id, $meta_key, true );
+		$old = is_array( $old ) ? $old : array();
+		foreach ( $meta_value as $name => $granted ) {
+			if ( $granted && empty( $old[ $name ] ) && self::is_admin_level( (string) $name ) ) {
+				return false;
+			}
+		}
+		return $check;
+	}
+
+	/**
+	 * Filter pre_update_option, for the roles option ({prefix}user_roles):
+	 * a role cannot gain an administrator-level capability, and a new role
+	 * cannot be made with one, so a role editor plugin cannot turn Editor
+	 * into an administrator (ticket 074's M2, back with ticket 075). Each role
+	 * is compared with the roles as this request first found them stored;
+	 * every other change saves, WooCommerce adding its own capabilities
+	 * included.
+	 *
+	 * @param mixed  $value     The value being saved.
+	 * @param string $option    The option name.
+	 * @param mixed  $old_value The stored value.
+	 * @return mixed
+	 */
+	public static function keep_role_definitions( $value, $option, $old_value ) {
+		global $wpdb;
+		if ( ! is_array( $value ) || ! isset( $wpdb->prefix ) || $wpdb->prefix . 'user_roles' !== $option || self::is_trusted_context() ) {
+			return $value;
+		}
+		if ( null === self::$roles_at_start ) {
+			self::$roles_at_start = is_array( $old_value ) ? $old_value : array();
+		}
+		foreach ( $value as $slug => $role ) {
+			if ( ! is_array( $role ) || ! isset( $role['capabilities'] ) || ! is_array( $role['capabilities'] ) ) {
+				continue;
+			}
+			$had = self::$roles_at_start[ $slug ]['capabilities'] ?? array();
+			$had = is_array( $had ) ? $had : array();
+			foreach ( Foundry_Toolkit_Privilege::ADMIN_CAPS as $cap ) {
+				if ( ! empty( $role['capabilities'][ $cap ] ) && empty( $had[ $cap ] ) ) {
+					unset( $value[ $slug ]['capabilities'][ $cap ] );
+				}
+			}
+		}
+		return $value;
 	}
 
 	/**
