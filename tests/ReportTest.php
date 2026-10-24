@@ -27,7 +27,11 @@ final class ReportTest extends TestCase {
 		parent::tearDown();
 	}
 
-	/** A site with an admin called admin, a premium plugin with an update, and Wordfence 2FA. */
+	/**
+	 * A site with an admin called admin, a premium plugin with an update,
+	 * one administrator on the Two Factor plugin, and the 2FA table an
+	 * uninstalled Wordfence left behind, naming two of them.
+	 */
 	private function stub_wordpress(): void {
 		global $wpdb;
 		$wpdb       = new wpdb();
@@ -124,7 +128,9 @@ final class ReportTest extends TestCase {
 			)
 		);
 		Functions\when( 'get_users' )->justReturn( array( 1, 2, 7 ) );
-		Functions\when( 'get_user_meta' )->justReturn( '' );
+		Functions\when( 'get_user_meta' )->alias(
+			fn( int $id, string $key ) => ( 1 === $id && '_two_factor_enabled_providers' === $key ) ? array( 'Two_Factor_Totp' ) : ''
+		);
 		Functions\when( 'get_user_by' )->justReturn( new WP_User( 7, 'admin', 'superadmin@example.test', array( 'administrator' ) ) );
 		Functions\when( 'wp_login_url' )->justReturn( 'https://example.test/wp-login.php' );
 		Functions\when( 'wp_parse_url' )->alias( fn( string $u, int $c ) => parse_url( $u, $c ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
@@ -167,8 +173,10 @@ final class ReportTest extends TestCase {
 		$this->assertSame( 1, $r['protocol'] );
 		$this->assertSame( '6.9', $r['wp']['update_version'] );
 		$this->assertSame( 3, $r['users']['administrators'] );
-		$this->assertSame( 2, $r['users']['administrators_with_2fa'] );
-		$this->assertSame( 'wordfence', $r['users']['two_factor_source'] );
+		// Wordfence's leftover table is not read: 2FA comes from the Two
+		// Factor plugin only (Caribbean Rollerama, 2026-10-24).
+		$this->assertSame( 1, $r['users']['administrators_with_2fa'] );
+		$this->assertSame( 'two-factor', $r['users']['two_factor_source'] );
 		$this->assertTrue( $r['users']['has_admin_username'] );
 		$this->assertFalse( $r['users']['two_factor_required'], '2FA is not required unless the gate booted' );
 		$this->assertFalse( $r['users']['two_factor_plugin_missing'] );

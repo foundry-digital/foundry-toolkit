@@ -587,7 +587,6 @@ final class SiteManager_Agent {
 	 * @return array<string, mixed>
 	 */
 	private static function report_users() {
-		global $wpdb;
 		$counts    = count_users();
 		$admins    = isset( $counts['avail_roles']['administrator'] ) ? (int) $counts['avail_roles']['administrator'] : 0;
 		$admin_ids = get_users(
@@ -598,26 +597,15 @@ final class SiteManager_Agent {
 			)
 		);
 		$admin_ids = array_map( 'intval', (array) $admin_ids );
-		$source    = 'none';
-		$with_2fa  = 0;
-		if ( $wpdb instanceof wpdb && ! empty( $admin_ids ) ) {
-			$wfls = $wpdb->prefix . 'wfls_2fa_secrets';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
-			$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wfls ) );
-			if ( $exists === $wfls ) {
-				$source = 'wordfence';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$ids      = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT user_id FROM %i', $wfls ) );
-				$with_2fa = count( array_intersect( $admin_ids, array_map( 'intval', $ids ) ) );
-			}
-		}
-		if ( 'none' === $source ) {
-			foreach ( $admin_ids as $id ) {
-				$providers = get_user_meta( $id, '_two_factor_enabled_providers', true );
-				if ( is_array( $providers ) && ! empty( $providers ) ) {
-					$source = 'two-factor';
-					++$with_2fa;
-				}
+		// The Two Factor plugin only: an uninstalled Wordfence leaves its 2FA
+		// table behind, and reading it hid every Two Factor user.
+		$source   = 'none';
+		$with_2fa = 0;
+		foreach ( $admin_ids as $id ) {
+			$providers = get_user_meta( $id, '_two_factor_enabled_providers', true );
+			if ( is_array( $providers ) && ! empty( $providers ) ) {
+				$source = 'two-factor';
+				++$with_2fa;
 			}
 		}
 		$admin_user = get_user_by( 'login', 'admin' );
