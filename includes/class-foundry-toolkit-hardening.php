@@ -119,6 +119,10 @@ final class Foundry_Toolkit_Hardening {
 			require_once __DIR__ . '/class-foundry-toolkit-admin-lock.php';
 			Foundry_Toolkit_Admin_Lock::boot( true !== FOUNDRY_ALLOW_TOOLS, true !== FOUNDRY_ALLOW_SETTINGS, true !== FOUNDRY_ALLOW_ADMIN_CHANGES );
 		}
+		if ( true !== FOUNDRY_ALLOW_VIDEO_UPLOADS && ! ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			require_once __DIR__ . '/class-foundry-toolkit-upload-lock.php';
+			Foundry_Toolkit_Upload_Lock::boot();
+		}
 		self::$booted = true;
 	}
 
@@ -170,9 +174,13 @@ final class Foundry_Toolkit_Hardening {
 			// The site address, admin email, theme, upload path and
 			// Settings, All Settings (ADR 0036). Additional CSS is never locked.
 			'FOUNDRY_ALLOW_SETTINGS'          => false,
-			// Editing, deleting or demoting another privileged account (ADR
-			// 0036). Creating administrators stays open (James, 2026-10-18).
+			// Creating an administrator or giving administrator-level powers
+			// (ticket 075), and editing, deleting or demoting another
+			// privileged account (ADR 0036).
 			'FOUNDRY_ALLOW_ADMIN_CHANGES'     => false,
+			// Uploading video files, for everyone (ADR 0039). Gravity Forms
+			// file fields keep their own allowed types either way.
+			'FOUNDRY_ALLOW_VIDEO_UPLOADS'     => false,
 			// Privileged accounts (administrators, editors, shop managers,
 			// ticket 071) without an authenticator app are held at the
 			// setup wizard (ADR 0035). Only in an emergency, such as every
