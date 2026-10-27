@@ -395,7 +395,22 @@ final class SiteManager_Agent {
 			'constants'    => self::report_constants(),
 			'security'     => self::report_security(),
 			'health'       => self::report_health(),
+			'server'       => self::report_server(),
 		);
+	}
+
+	/**
+	 * The address the web server answered this request on, so the app can
+	 * tell which sites share a server (P26, Foundry Toolkit 1.19.0). Only
+	 * SERVER_ADDR: never REMOTE_ADDR or a forwarded header, which name the
+	 * requester, a person (S6). Null when PHP has none or it is not an IP.
+	 *
+	 * @return array{ip: string|null}
+	 */
+	private static function report_server() {
+		$addr = isset( $_SERVER['SERVER_ADDR'] ) && is_string( $_SERVER['SERVER_ADDR'] ) ? $_SERVER['SERVER_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- validated as an IP below.
+		$ip   = filter_var( $addr, FILTER_VALIDATE_IP );
+		return array( 'ip' => false === $ip ? null : $ip );
 	}
 
 	/**

@@ -258,10 +258,49 @@ final class ReportTest extends TestCase {
 	}
 
 	public function test_report_has_no_personal_data(): void {
-		$json = (string) json_encode( SiteManager_Agent::build_report() );
-		foreach ( array( 'superadmin@example.test', 'jo@example.test', '"admin"', 'user_login', 'user_email', '203.0.113.9' ) as $needle ) {
+		// The requester and any forwarded visitor are people; only the
+		// server's own address may appear (S6, P26).
+		$_SERVER['REMOTE_ADDR']           = '203.0.113.9';
+		$_SERVER['HTTP_X_FORWARDED_FOR']  = '203.0.113.8';
+		$_SERVER['HTTP_CF_CONNECTING_IP'] = '203.0.113.7';
+		$json                             = (string) json_encode( SiteManager_Agent::build_report() );
+		unset( $_SERVER['REMOTE_ADDR'], $_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_CF_CONNECTING_IP'] );
+		foreach ( array( 'superadmin@example.test', 'jo@example.test', '"admin"', 'user_login', 'user_email', '203.0.113.9', '203.0.113.8', '203.0.113.7' ) as $needle ) {
 			$this->assertStringNotContainsString( $needle, $json, "report leaks {$needle}" );
 		}
+	}
+
+	/**
+	 * The server's own address, so the app can group sites by server (P26,
+	 * Foundry Toolkit 1.19.0).
+	 *
+	 * @dataProvider server_addresses
+	 *
+	 * @param string|null $addr What PHP put in SERVER_ADDR, null for nothing.
+	 * @param string|null $want What the report says.
+	 */
+	public function test_report_names_the_server_address( $addr, $want ): void {
+		unset( $_SERVER['SERVER_ADDR'] );
+		if ( null !== $addr ) {
+			$_SERVER['SERVER_ADDR'] = $addr;
+		}
+		$r = SiteManager_Agent::build_report();
+		unset( $_SERVER['SERVER_ADDR'] );
+		$this->assertSame( array( 'ip' => $want ), $r['server'] );
+	}
+
+	/**
+	 * @return array<string, array{0: string|null, 1: string|null}>
+	 */
+	public function server_addresses(): array {
+		return array(
+			'ipv4'           => array( '198.51.100.7', '198.51.100.7' ),
+			'ipv6'           => array( '2001:db8::7', '2001:db8::7' ),
+			'private'        => array( '10.0.0.4', '10.0.0.4' ),
+			'not set (cli)'  => array( null, null ),
+			'not an address' => array( 'localhost', null ),
+			'empty'          => array( '', null ),
+		);
 	}
 
 	public function test_report_makes_no_http_requests(): void {

@@ -130,5 +130,6 @@
     "paused_plugins": [],
     "paused_themes": [],
     "last_fatal": null
-  }
+  },
+  "server": { "ip": "203.0.113.10" }
 }

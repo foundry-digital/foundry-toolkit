@@ -189,6 +189,15 @@
           ]
         }
       }
+    },
+    "server": {
+      "description": "Optional, from Foundry Toolkit 1.19.0 (P26). The web server's own address, never the requester's (S6).",
+      "type": "object",
+      "required": ["ip"],
+      "additionalProperties": false,
+      "properties": {
+        "ip": { "anyOf": [ { "type": "null" }, { "type": "string", "format": "ipv4" }, { "type": "string", "format": "ipv6" } ] }
+      }
     }
   },
   "$defs": {
