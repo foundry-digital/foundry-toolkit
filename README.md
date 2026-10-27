@@ -13,6 +13,8 @@ Plugins, Add New, Upload Plugin, choose `foundry-toolkit.zip` from the latest re
 
 On activation the plugin writes `wp-content/mu-plugins/0-foundry-toolkit.php`. That small loader includes the toolkit before any other plugin, the way a bouncer is at the door before the guests arrive: hardening's constants (`DISALLOW_FILE_EDIT`, the HTTPS fix) only count if they are set first. Deactivating removes it. If the folder is not writable, a notice says so.
 
+It also writes two pages into `wp-content`, which WordPress shows in place of its own screens: `db-error.php` when the database is down ("We'll be right back") and `maintenance.php` while an update runs ("Just a moment"). Both are plain dark pages with "Site cared for by Foundry Digital" at the bottom, answer 503 with `Retry-After` so search engines treat the outage as short, and send `X-Foundry-Status` so Site Manager's uptime monitor names the cause. They are rewritten on the next visit to wp-admin after an update changes them, and deactivating removes them. If your host or another plugin already put one there, the toolkit leaves it alone and a notice says so. One case skips `db-error.php`: a site with `WP_DEBUG` and `WP_DEBUG_DISPLAY` both on shows WordPress's detailed error instead.
+
 ## Switches
 
 Everything is locked by default. Each switch unlocks one thing: add `define( 'FOUNDRY_ALLOW_…', true );` to `wp-config.php`, do the job, then take the line out. A line in `wp-config.php` is always an unlock, never a lock (ADR 0037 in the Site Manager repository). It is like a building where every door is locked and each key is in the manager's safe: a stolen staff badge (a leaked password) opens nothing, because the keys need file access to the server.

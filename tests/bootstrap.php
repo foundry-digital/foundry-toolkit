@@ -441,6 +441,7 @@ class SM_Test_Upgrader {
 
 require __DIR__ . '/../includes/class-foundry-toolkit.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-loader.php';
+require __DIR__ . '/../includes/class-foundry-toolkit-dropins.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-privilege.php';
 require __DIR__ . '/../includes/class-foundry-toolkit-updater.php';
 require __DIR__ . '/../includes/class-sitemanager-agent.php';

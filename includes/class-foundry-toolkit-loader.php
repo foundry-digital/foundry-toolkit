@@ -98,8 +98,7 @@ unset( $foundry_toolkit_plugin );
 	}
 
 	/**
-	 * Activation hook: write the loader. Writes to a temporary file and
-	 * renames it, so a request never includes a half-written loader.
+	 * Activation hook: write the loader.
 	 *
 	 * @return bool Whether the loader is now current.
 	 */
@@ -108,13 +107,25 @@ unset( $foundry_toolkit_plugin );
 		if ( ! is_dir( $dir ) && ! mkdir( $dir, 0755, true ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- must-use folder, written directly like ManageWP Worker.
 			return false;
 		}
+		return self::write( self::path(), self::contents( self::plugin_basename() ) );
+	}
+
+	/**
+	 * Write a file to a temporary file and rename it, so a request never
+	 * includes it half written. The drop-ins in wp-content use it too.
+	 *
+	 * @param string $path     Full path.
+	 * @param string $contents File body.
+	 * @return bool Whether it was written.
+	 */
+	public static function write( $path, $contents ) {
 		// A random name, not the process id: hosts such as Kinsta disable the
 		// process id function, and calling a disabled function is fatal on PHP 8.
-		$tmp = $dir . '/.' . self::FILE . '.' . str_replace( '.', '', uniqid( '', true ) ) . '.tmp';
-		if ( false === file_put_contents( $tmp, self::contents( self::plugin_basename() ) ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- as above.
+		$tmp = dirname( $path ) . '/.' . basename( $path ) . '.' . str_replace( '.', '', uniqid( '', true ) ) . '.tmp';
+		if ( false === file_put_contents( $tmp, $contents ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- written directly like ManageWP Worker.
 			return false;
 		}
-		if ( ! rename( $tmp, self::path() ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- as above.
+		if ( ! rename( $tmp, $path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions -- as above.
 			unlink( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions -- as above.
 			return false;
 		}

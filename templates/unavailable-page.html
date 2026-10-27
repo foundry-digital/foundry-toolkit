@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121118;
+    --ink: #f2f1f6;
+    --muted: #9a98a6;
+    --glow: rgba(124, 94, 240, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(60rem 40rem at 50% -10%, var(--glow), transparent 70%);
+    color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+  }
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    max-width: 40rem;
+    margin: 0 auto;
+    animation: rise 0.9s cubic-bezier(.2, .7, .2, 1) both;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 5vw, 2.6rem);
+    line-height: 1.15;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.9rem;
+  }
+  p { color: var(--muted); }
+  footer {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    padding: 1.5rem 0 2rem;
+    font-size: 0.8rem; color: var(--muted);
+  }
+  footer svg { width: 18px; height: 18px; border-radius: 4px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+  @media (prefers-reduced-motion: reduce) { main { animation: none; } }
+
+</style>
+</head>
+<body>
+<main>
+  <h1>{{HEADING}}</h1>
+  <p>{{PARAGRAPH}}</p>
+</main>
+
+<footer>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 373 373" aria-hidden="true"><g><rect fill="#5634d1" width="373" height="373" rx="30" ry="30"></rect><g><path fill="#fff" d="M38.31,329.67v-26.24h-10.54v-7.89h10.54v-5.79c0-3.35,1.12-6.02,3.35-8.03,2.23-2,5.19-3,8.86-3h11.24v7.68h-11.03c-1.12,0-2.01.31-2.69.94-.67.63-1.01,1.48-1.01,2.55v5.65h14.73v7.89h-14.73v26.24h-8.72Z"></path><path fill="#fff" d="M86.81,330.3c-3.26,0-6.08-.62-8.48-1.85-2.4-1.23-4.26-2.98-5.58-5.23-1.33-2.26-1.99-4.92-1.99-7.99v-9.49c0-3.07.66-5.73,1.99-7.99s3.19-4,5.58-5.23c2.4-1.23,5.22-1.85,8.48-1.85s6.14.62,8.51,1.85,4.22,2.98,5.55,5.23,1.99,4.9,1.99,7.92v9.56c0,3.07-.66,5.74-1.99,7.99-1.33,2.26-3.18,4-5.55,5.23s-5.21,1.85-8.51,1.85ZM86.81,322.69c2.33,0,4.13-.64,5.41-1.92s1.92-3.13,1.92-5.55v-9.49c0-2.46-.64-4.33-1.92-5.58-1.28-1.26-3.08-1.88-5.41-1.88s-4.07.63-5.37,1.88c-1.3,1.26-1.95,3.12-1.95,5.58v9.49c0,2.42.65,4.27,1.95,5.55,1.3,1.28,3.09,1.92,5.37,1.92Z"></path><path fill="#fff" d="M128.69,330.37c-4.89,0-8.72-1.36-11.52-4.08-2.79-2.72-4.19-6.43-4.19-11.13v-23.87h8.72v23.8c0,2.47.6,4.36,1.81,5.69,1.21,1.33,2.93,1.99,5.17,1.99s3.9-.66,5.13-1.99c1.23-1.33,1.85-3.22,1.85-5.69v-23.8h8.72v23.87c0,4.7-1.42,8.41-4.26,11.13-2.84,2.72-6.65,4.08-11.45,4.08Z"></path><path fill="#fff" d="M155,329.67v-38.39h8.51v7.33h2.37l-2.37,2.02c0-3.16.92-5.63,2.76-7.4,1.84-1.77,4.36-2.65,7.57-2.65,3.77,0,6.78,1.26,9.04,3.77,2.26,2.51,3.38,5.89,3.38,10.12v25.2h-8.72v-24.29c0-2.33-.6-4.12-1.81-5.37-1.21-1.26-2.91-1.88-5.09-1.88s-3.83.65-5.06,1.96c-1.23,1.3-1.85,3.16-1.85,5.58v24.01h-8.72Z"></path><path fill="#fff" d="M209.16,330.37c-3.82,0-6.9-1.33-9.25-3.98-2.35-2.65-3.52-6.21-3.52-10.68v-10.4c0-4.51,1.16-8.1,3.49-10.75,2.33-2.65,5.42-3.98,9.28-3.98,3.16,0,5.68.9,7.54,2.69,1.86,1.79,2.79,4.25,2.79,7.36l-1.95-2.02h2.02l-.28-9.14v-10.75h8.72v50.95h-8.51v-7.33h-1.95l1.95-2.02c0,3.12-.93,5.57-2.79,7.36-1.86,1.79-4.37,2.69-7.54,2.69ZM212.23,322.83c2.23,0,3.97-.66,5.2-1.99,1.23-1.33,1.85-3.18,1.85-5.55v-9.63c0-2.37-.62-4.22-1.85-5.55-1.23-1.33-2.97-1.99-5.2-1.99s-3.98.65-5.23,1.96-1.88,3.16-1.88,5.58v9.63c0,2.42.63,4.28,1.88,5.58,1.26,1.3,3,1.95,5.23,1.95Z"></path><path fill="#fff" d="M239.94,329.67v-38.39h8.24v7.33h2.16l-2.58,4.47c0-4.14.93-7.26,2.79-9.35,1.86-2.09,4.61-3.14,8.24-3.14,4.14,0,7.4,1.28,9.77,3.84,2.37,2.56,3.56,6.1,3.56,10.61v2.79h-9.14v-2.16c0-2.47-.64-4.37-1.92-5.72-1.28-1.35-3.04-2.02-5.27-2.02s-4.04.68-5.27,2.02c-1.23,1.35-1.85,3.26-1.85,5.72v24.01h-8.72Z"></path><path fill="#fff" d="M286.84,342.23l5.37-14.66-14.31-36.29h9.56l7.12,19.61c.37,1.07.74,2.36,1.12,3.87.37,1.51.65,2.76.84,3.73.23-.98.53-2.22.91-3.73.37-1.51.74-2.8,1.12-3.87l6.7-19.61h9.21l-18.5,50.95h-9.14Z"></path><path fill="#fff" d="M334.5,330.37c-2,0-3.59-.58-4.78-1.75-1.19-1.16-1.78-2.75-1.78-4.75s.59-3.59,1.78-4.78c1.19-1.19,2.78-1.78,4.78-1.78s3.59.59,4.78,1.78c1.19,1.19,1.78,2.78,1.78,4.78s-.59,3.58-1.78,4.75-2.78,1.75-4.78,1.75Z"></path></g></g></svg>
+  <span>Site cared for by Foundry Digital</span>
+</footer>
+
+</body>
+</html>
