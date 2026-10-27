@@ -40,6 +40,7 @@ if ( ! defined( 'SITEMANAGER_PUBLIC_KEY' ) ) {
 
 require_once __DIR__ . '/includes/class-foundry-toolkit.php';
 require_once __DIR__ . '/includes/class-foundry-toolkit-loader.php';
+require_once __DIR__ . '/includes/class-foundry-toolkit-dropins.php';
 require_once __DIR__ . '/includes/class-foundry-toolkit-privilege.php';
 require_once __DIR__ . '/includes/class-foundry-toolkit-updater.php';
 

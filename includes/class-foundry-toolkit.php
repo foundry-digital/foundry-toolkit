@@ -90,6 +90,9 @@ final class Foundry_Toolkit {
 		register_activation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Loader', 'activate' ) );
 		register_deactivation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Loader', 'remove' ) );
 		add_action( 'admin_init', array( 'Foundry_Toolkit_Loader', 'repair' ) );
+		register_activation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Dropins', 'activate' ) );
+		register_deactivation_hook( FOUNDRY_TOOLKIT_FILE, array( 'Foundry_Toolkit_Dropins', 'remove' ) );
+		add_action( 'admin_init', array( 'Foundry_Toolkit_Dropins', 'repair' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'notices' ) );
 		add_action( 'network_admin_notices', array( __CLASS__, 'notices' ) );
 	}
@@ -131,6 +134,16 @@ final class Foundry_Toolkit {
 			printf(
 				'<div class="notice notice-warning"><p>%s</p></div>',
 				esc_html__( 'Foundry Toolkit could not write its loader to wp-content/mu-plugins, so its hardening loads after other plugins. Make that folder writable, then reload this page.', 'foundry-toolkit' )
+			);
+		}
+		foreach ( Foundry_Toolkit_Dropins::blocked() as $f ) {
+			printf(
+				'<div class="notice notice-info"><p>%s</p></div>',
+				sprintf(
+					/* translators: %s: file name in wp-content. */
+					esc_html__( 'wp-content/%s was put there by your host or another plugin, so Foundry Toolkit leaves it alone and does not show its own page in its place.', 'foundry-toolkit' ),
+					esc_html( $f )
+				)
 			);
 		}
 	}
