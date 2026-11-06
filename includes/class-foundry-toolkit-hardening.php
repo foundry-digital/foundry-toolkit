@@ -99,6 +99,12 @@ final class Foundry_Toolkit_Hardening {
 		if ( true !== FOUNDRY_ALLOW_APP_PASSWORDS ) {
 			add_filter( 'wp_is_application_passwords_available', '__return_false' );
 		}
+		if ( true !== FOUNDRY_ALLOW_RANDOM_CONTENT ) {
+			// WordPress 7.2's /random/ redirect to a random post, on by
+			// default. Off means no rewrite rules, no field on Settings,
+			// Permalinks, and the random query variable ignored.
+			add_filter( 'wp_enable_random_content_redirect', '__return_false' );
+		}
 		add_filter( 'wp_login_errors', array( __CLASS__, 'capture_login_errors' ), 999 );
 		add_filter( 'lostpassword_errors', array( __CLASS__, 'capture_login_errors' ), 999 );
 		add_filter( 'login_errors', array( __CLASS__, 'generic_login_error' ) );
@@ -181,6 +187,9 @@ final class Foundry_Toolkit_Hardening {
 			// Uploading video files, for everyone (ADR 0039). Gravity Forms
 			// file fields keep their own allowed types either way.
 			'FOUNDRY_ALLOW_VIDEO_UPLOADS'     => false,
+			// WordPress 7.2's /random/ address, which redirects to a random
+			// published post (make.wordpress.org/core, 2026-11-05).
+			'FOUNDRY_ALLOW_RANDOM_CONTENT'    => false,
 			// Privileged accounts (administrators, editors, shop managers,
 			// ticket 071) without an authenticator app are held at the
 			// setup wizard (ADR 0035). Only in an emergency, such as every

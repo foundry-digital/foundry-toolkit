@@ -17,5 +17,6 @@ define( 'FOUNDRY_ALLOW_TOOLS', false );
 define( 'FOUNDRY_ALLOW_SETTINGS', false );
 define( 'FOUNDRY_ALLOW_ADMIN_CHANGES', false );
 define( 'FOUNDRY_ALLOW_VIDEO_UPLOADS', false );
+define( 'FOUNDRY_ALLOW_RANDOM_CONTENT', false );
 define( 'FOUNDRY_ALLOW_LOGIN_WITHOUT_2FA', false );
 define( 'FOUNDRY_ALLOW_PRERELEASES', false );

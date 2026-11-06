@@ -49,6 +49,9 @@ final class HardeningTest extends TestCase {
 		if ( 'test_default_role_guard_is_on_with_the_registration_lock_off' === $this->getName( false ) ) {
 			define( 'FOUNDRY_ALLOW_REGISTRATION', true ); // Before define_toggles(), as wp-config.php would.
 		}
+		if ( 'test_random_content_redirect_stays_with_its_switch_on' === $this->getName( false ) ) {
+			define( 'FOUNDRY_ALLOW_RANDOM_CONTENT', true );
+		}
 		Foundry_Toolkit_Hardening::define_toggles();
 	}
 
@@ -248,5 +251,40 @@ final class HardeningTest extends TestCase {
 		Foundry_Toolkit_Hardening::boot();
 		$this->assertContains( array( 'Foundry_Toolkit_Hardening', 'safe_default_role' ), $filters['option_default_role'] ?? array() );
 		$this->assertArrayNotHasKey( 'pre_option_default_role', $filters );
+	}
+
+	/**
+	 * Boot with every hook recorded instead of registered.
+	 *
+	 * @return array<string, array<int, mixed>> Callbacks by filter name.
+	 */
+	private function boot_and_record_filters(): array {
+		Functions\when( 'add_action' )->justReturn( true );
+		Functions\when( 'remove_action' )->justReturn( true );
+		Functions\when( 'plugin_basename' )->justReturn( 'foundry-toolkit/foundry-toolkit.php' );
+		$filters = array();
+		Functions\when( 'add_filter' )->alias(
+			static function ( string $hook, $callback ) use ( &$filters ): bool {
+				$filters[ $hook ][] = $callback;
+				return true;
+			}
+		);
+		Foundry_Toolkit_Hardening::boot();
+		return $filters;
+	}
+
+	/**
+	 * WordPress 7.2's /random/ redirect (make.wordpress.org/core, 2026-11-05)
+	 * is off on every site: no rewrite rules, no permalinks field, and the
+	 * random query variable ignored.
+	 */
+	public function test_random_content_redirect_is_off_by_default(): void {
+		$filters = $this->boot_and_record_filters();
+		$this->assertContains( '__return_false', $filters['wp_enable_random_content_redirect'] ?? array() );
+	}
+
+	public function test_random_content_redirect_stays_with_its_switch_on(): void {
+		$filters = $this->boot_and_record_filters();
+		$this->assertArrayNotHasKey( 'wp_enable_random_content_redirect', $filters );
 	}
 }
